@@ -1,0 +1,41 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "hero-home",
+      "description": "A modern computer lab with students working on their desktops.",
+      "imageUrl": "https://picsum.photos/seed/hero-home/1920/1080",
+      "imageHint": "computer lab"
+    },
+    {
+      "id": "hero-classroom",
+      "description": "A teacher in a classroom, holding a laptop and interacting with students.",
+      "imageUrl": "https://picsum.photos/seed/classroom/1920/1080",
+      "imageHint": "teacher classroom"
+    },
+    {
+      "id": "hero-home-computer",
+      "description": "A person working on a modern computer setup.",
+      "imageUrl": "https://picsum.photos/seed/computer/1920/1080",
+      "imageHint": "computer"
+    },
+    {
+      "id": "team-1",
+      "description": "Portrait of a smiling professional, Jane Doe.",
+      "imageUrl": "https://picsum.photos/seed/team1/400/400",
+      "imageHint": "professional woman"
+    },
+    {
+      "id": "team-2",
+      "description": "Portrait of a confident professional, John Smith.",
+      "imageUrl": "https://picsum.photos/seed/team2/400/400",
+      "imageHint": "professional man"
+    },
+    {
+      "id": "team-3",
+      "description": "Portrait of a friendly professional, Emily White.",
+      "imageUrl": "https://picsum.photos/seed/team3/400/400",
+      "imageHint": "friendly woman"
+    }
+  ]
+}

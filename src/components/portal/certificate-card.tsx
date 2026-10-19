@@ -1,32 +1,91 @@
-'use client';
-
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { CertificateQRCode } from './qr-code';
 import { StudentRecord } from '@/lib/types/portal';
-import { CheckCircle2, Download, Printer, Share2, ShieldCheck, User, Layout, FileText } from 'lucide-react';
+import { CheckCircle2, Download, Printer, Share2, ShieldCheck, User, Layout, FileText, Camera, Upload, Loader2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { uploadStudentPhotoFile, updateStudent } from '@/lib/supabase/student-service';
 
 interface CertificateCardProps {
   student: StudentRecord;
   showActions?: boolean;
+  onPhotoUpdated?: (updated: StudentRecord) => void;
 }
 
-export function CertificateCard({ student, showActions = true }: CertificateCardProps) {
+function formatTitleCase(str: string): string {
+  if (!str) return '';
+  return str
+    .trim()
+    .split(/\s+/)
+    .map((word) => {
+      if (word.length > 1 && word === word.toUpperCase()) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+function formatFatherName(name: string): string {
+  if (!name) return 'N/A';
+  let clean = name.trim();
+  clean = clean.replace(/^(mr\.?\s*)+/i, '');
+  clean = formatTitleCase(clean);
+  return `Mr. ${clean}`;
+}
+
+export function CertificateCard({ student, showActions = true, onPhotoUpdated }: CertificateCardProps) {
   const certRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [copied, setCopied] = useState(false);
   const [templateView, setTemplateView] = useState<'official' | 'ornamental'>('official');
 
-  const studentName = student.student_name || student.name || 'Student';
-  const fatherName = student.father_name || 'Father Name';
+  const [currentPhoto, setCurrentPhoto] = useState<string | null>(
+    student.profile_picture_url || student.photo_url || student.student_image || null
+  );
+
+  useEffect(() => {
+    setCurrentPhoto(student.profile_picture_url || student.photo_url || student.student_image || null);
+  }, [student]);
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingPhoto(true);
+      const photoUrl = await uploadStudentPhotoFile(file);
+      if (photoUrl) {
+        setCurrentPhoto(photoUrl);
+        const updated = await updateStudent(student.id, {
+          ...student,
+          profile_picture_url: photoUrl,
+          photo_url: photoUrl,
+          student_image: photoUrl,
+        });
+        if (updated) {
+          onPhotoUpdated?.(updated);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to upload student photo:', err);
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const rawStudentName = student.student_name || student.name || 'Student';
+  const studentName = formatTitleCase(rawStudentName);
+
+  const rawFatherName = student.father_name || 'Father Name';
+  const fatherName = formatFatherName(rawFatherName);
+
   const rollNo = student.roll_no || student.roll_number || student.student_id || '10101';
   const enrollNo = student.enrollment_no || `EN-${rollNo}`;
   const certNo = student.certificate_no || `SP-${rollNo}`;
-  const course = student.course || 'Computer Application';
-  const duration = student.duration || student.session || '6 Months';
+  const course = student.course || 'Diploma in Computer Application (DCA)';
+  const duration = student.duration || student.session || '2023-2024';
   const subject = student.subject || course;
   const marks = student.marks || '85%';
   const grade = student.grade || 'A';
@@ -121,26 +180,24 @@ export function CertificateCard({ student, showActions = true }: CertificateCard
               <ShieldCheck className="w-5 h-5" />
               <span>Verified Certificate</span>
             </div>
-            
+
             {/* View Switcher Buttons */}
             <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium">
               <button
                 onClick={() => setTemplateView('official')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
-                  templateView === 'official'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm font-bold'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${templateView === 'official'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
               >
                 <FileText className="w-3.5 h-3.5" /> Official Institute A4
               </button>
               <button
                 onClick={() => setTemplateView('ornamental')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
-                  templateView === 'ornamental'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm font-bold'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${templateView === 'ornamental'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
               >
                 <Layout className="w-3.5 h-3.5" /> Modern Landscape
               </button>
@@ -148,6 +205,25 @@ export function CertificateCard({ student, showActions = true }: CertificateCard
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <label
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-700/60 rounded-lg cursor-pointer transition-colors shadow-xs"
+              title="Upload or change student photo on this certificate"
+            >
+              {isUploadingPhoto ? (
+                <Loader2 className="w-4 h-4 animate-spin text-amber-700 dark:text-amber-300" />
+              ) : (
+                <Camera className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+              )}
+              <span>{isUploadingPhoto ? 'Uploading...' : currentPhoto ? 'Change Student Photo' : 'Upload Student Photo'}</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoSelect}
+                className="hidden"
+                disabled={isUploadingPhoto}
+              />
+            </label>
+
             <button
               onClick={handleCopyLink}
               className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
@@ -196,192 +272,240 @@ export function CertificateCard({ student, showActions = true }: CertificateCard
       )}
 
       {/* Printable Certificate Frame */}
-      <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl print:p-0 print:bg-white flex justify-center">
+      <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl print:p-0 print:bg-transparent printable-certificate-wrapper flex justify-center w-full">
         {templateView === 'official' ? (
-          /* Official Institute Portrait A4 Template (Matches certificate copy.jpeg) */
+          /* Official Institute Portrait A4 Template with Designer Border */
           <div
             ref={certRef}
-            className="w-full max-w-[210mm] bg-white text-slate-900 border-[3px] border-black p-6 sm:p-10 shadow-2xl rounded-sm flex flex-col justify-between print:shadow-none print:border-[3px] font-sans"
+            className="printable-certificate w-full max-w-[210mm] bg-white text-slate-900 border-[10px] border-double border-amber-600/90 p-4 sm:p-5 shadow-2xl rounded-sm flex flex-col justify-between print:shadow-none print:border-[10px] font-sans relative box-border"
             style={{
               aspectRatio: '1 / 1.414',
+              boxSizing: 'border-box',
             }}
           >
-            {/* Top Roll & Enrollment Header */}
-            <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-900 font-sans">
-              <div>Roll no : <span className="font-mono">{rollNo}</span></div>
-              <div>Enrollment No: <span className="font-mono">{enrollNo}</span></div>
-            </div>
+            {/* Designer Inner Border & Corner Ornaments */}
+            <div className="border-2 border-amber-600/70 p-5 sm:p-6 flex flex-col justify-between h-full relative bg-gradient-to-b from-amber-50/20 via-white to-amber-50/20 box-border">
+              {/* Designer Corner Flourishes */}
+              <div className="absolute top-1 left-1 w-8 h-8 border-t-4 border-l-4 border-amber-600" />
+              <div className="absolute top-2 left-2 w-10 h-10 border-t border-l border-amber-500/60" />
+              <div className="absolute top-1 right-1 w-8 h-8 border-t-4 border-r-4 border-amber-600" />
+              <div className="absolute top-2 right-2 w-10 h-10 border-t border-r border-amber-500/60" />
+              <div className="absolute bottom-1 left-1 w-8 h-8 border-b-4 border-l-4 border-amber-600" />
+              <div className="absolute bottom-2 left-2 w-10 h-10 border-b border-l border-amber-500/60" />
+              <div className="absolute bottom-1 right-1 w-8 h-8 border-b-4 border-r-4 border-amber-600" />
+              <div className="absolute bottom-2 right-2 w-10 h-10 border-b border-r border-amber-500/60" />
 
-            {/* Main Institute Header */}
-            <div className="text-center space-y-1 my-2">
-              <h1 className="text-xl sm:text-3xl font-black tracking-tight text-black font-sans uppercase">
-                SUCCESS POINT COMPUTER INSTITUTE
-              </h1>
-              <p className="text-[10px] sm:text-xs text-slate-800 font-medium">
-                (An autonomous body registered under the sr act section 9(1) act 2012)
-              </p>
-              <p className="text-[10px] sm:text-xs text-slate-800 font-medium">
-                cr act department for promotion of I.I.T govt of india
-              </p>
-              <p className="text-[10px] sm:text-xs text-slate-800 font-medium">
-                Gov.regn no hr/kkr/2015/00328
-              </p>
-            </div>
-
-            {/* Logo, Title & Student Photo Grid */}
-            <div className="grid grid-cols-3 items-center my-4">
-              {/* Left: Institute Logo */}
-              <div className="flex justify-start">
-                <Image
-                  src="/img/logosp.jpeg"
-                  alt="Success Point Logo"
-                  width={110}
-                  height={110}
-                  className="w-24 sm:w-28 h-auto object-contain"
-                />
+              {/* Top Roll & Enrollment Header */}
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-900 font-sans z-10 px-2">
+                <div>Roll No : <span className="font-mono text-blue-700 font-bold">{rollNo}</span></div>
+                <div>Enrollment No : <span className="font-mono text-blue-700 font-bold">{enrollNo}</span></div>
               </div>
 
-              {/* Center: CERTIFICATE Title */}
-              <div className="text-center">
-                <h2 className="text-2xl sm:text-4xl font-extrabold text-black font-sans tracking-wide">
-                  CERTIFICATE
-                </h2>
+              {/* Main Institute Header */}
+              <div className="text-center space-y-1 my-2 z-10 px-4">
+                <h1 className="text-xl sm:text-3xl font-black tracking-tight text-black font-sans uppercase">
+                  SUCCESS POINT COMPUTER INSTITUTE
+                </h1>
+                <p className="text-[10px] sm:text-xs text-slate-800 font-medium">
+                  (An Autonomous Body Registered Under the IT & Software Industries)
+                </p>
+                <p className="text-[10px] sm:text-xs text-slate-800 font-medium">
+                  Act Department for Promotion of Govt. of Uttarakhand & Govt. of India
+                </p>
+                <p className="text-[10px] sm:text-xs text-slate-800 font-semibold tracking-wide">
+                  Govt. Reg. No. - UKSAUSN000303
+                </p>
               </div>
 
-              {/* Right: Student Photo Frame */}
-              <div className="flex justify-end">
-                {student.profile_picture_url ? (
-                  <Image
-                    src={student.profile_picture_url}
-                    alt={studentName}
-                    width={100}
-                    height={120}
-                    className="w-24 h-28 object-cover border border-black shadow-sm"
+              {/* Logo, Title & Student Photo Grid */}
+              <div className="grid grid-cols-3 items-center my-3 z-10 px-3">
+                {/* Left: Institute Logo - INSET WITH SAFE PADDING TO PREVENT CUTOFF */}
+                <div className="flex justify-start items-center pl-2">
+                  <div className="w-22 h-22 sm:w-26 sm:h-26 flex items-center justify-center shrink-0">
+                    <img
+                      src="/img/logosp.jpeg"
+                      alt="Success Point Logo"
+                      className="max-w-full max-h-full object-contain"
+                      style={{ width: '96px', height: '96px', objectFit: 'contain' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Center: CERTIFICATE Title */}
+                <div className="text-center">
+                  <h2 className="text-2xl sm:text-4xl font-black text-black font-sans tracking-widest inline-block px-4">
+                    CERTIFICATE
+                  </h2>
+                </div>
+
+                {/* Right: Student Photo Frame - FIXED PASSPORT DIMENSIONS & NO STRETCH */}
+                <div className="flex justify-end pr-2 print:block">
+                  {currentPhoto ? (
+                    <div className="relative group shrink-0" style={{ width: '96px', height: '112px' }}>
+                      <img
+                        src={currentPhoto}
+                        alt={studentName}
+                        className="w-full h-full object-cover border-2 border-amber-600 shadow-sm rounded-xs"
+                        style={{ width: '96px', height: '112px', objectFit: 'cover' }}
+                      />
+                      {showActions && (
+                        <label
+                          className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold cursor-pointer transition-opacity print:hidden p-1 text-center"
+                          title="Click to Change Student Photo"
+                        >
+                          <Camera className="w-4 h-4 mb-1" />
+                          <span>Change Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handlePhotoSelect}
+                            className="hidden"
+                            disabled={isUploadingPhoto}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  ) : (
+                    <label
+                      className={`border border-slate-600 border-dashed flex flex-col items-center justify-center text-slate-500 bg-slate-50 rounded-xs shrink-0 ${showActions ? 'cursor-pointer hover:bg-slate-100 hover:border-black hover:text-black transition-colors' : ''}`}
+                      style={{ width: '96px', height: '112px' }}
+                      title={showActions ? "Click to Upload Student Photo" : "Student Photo"}
+                    >
+                      {isUploadingPhoto ? (
+                        <>
+                          <Loader2 className="w-6 h-6 animate-spin text-amber-600" />
+                          <span className="text-[10px] font-bold mt-1 text-slate-700">Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <User className="w-7 h-7 opacity-50" />
+                          <span className="text-[10px] font-bold mt-1 text-center px-1">Upload Photo</span>
+                        </>
+                      )}
+                      {showActions && (
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoSelect}
+                          className="hidden"
+                          disabled={isUploadingPhoto}
+                        />
+                      )}
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Certification Body Text */}
+              <div className="space-y-3 sm:space-y-3.5 text-xs sm:text-sm text-slate-900 leading-relaxed font-sans my-2 z-10 px-3 sm:px-5">
+                <p className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span>This is to certify that</span>
+                  <span className="font-bold text-blue-700 text-sm sm:text-base px-1 uppercase tracking-wide">
+                    {studentName}
+                  </span>
+                </p>
+                <p className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span>Father's Name:</span>
+                  <span className="font-bold text-blue-700 px-1">
+                    {fatherName}
+                  </span>
+                </p>
+                <p className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span>has completed</span>
+                  <span className="font-bold text-blue-700 px-1">{course}</span>
+                </p>
+                <p className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span>Course Duration :</span>
+                  <span className="font-bold text-blue-700 px-1">{duration}</span>
+                </p>
+                <p className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span>At</span>
+                  <span className="font-bold text-blue-800 font-sans text-xs sm:text-sm uppercase tracking-wide">
+                    SUCCESS POINT COMPUTER INSTITUTE (RUDRAPUR, UDHAM SINGH NAGAR, UTTARAKHAND)
+                  </span>
+                </p>
+                <p className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span>with the following subject/course:</span>
+                  <span className="font-bold text-blue-700 px-1">{subject}</span>
+                </p>
+                <p className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span>He/She has scored</span>
+                  <span className="font-bold text-blue-700 px-1">{marks}</span>
+                  <span>Marks.</span>
+                </p>
+                <p className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span>with Grade</span>
+                  <span className="font-bold text-blue-700 px-1">"{grade}"</span>
+                </p>
+              </div>
+
+              {/* Signatures & Verification QR Code Row */}
+              <div className="flex items-end justify-between pt-6 pb-2 my-2 border-b border-slate-200 z-10 px-2">
+                <div className="text-left font-bold text-xs sm:text-sm text-black">
+                  <div className="h-8 border-b border-slate-400 mb-1 w-32 sm:w-40" />
+                  Controller Of Examination
+                </div>
+
+                {/* QR Code in Official Certificate Footer */}
+                <div className="flex flex-col items-center text-center">
+                  <CertificateQRCode value={verificationUrl} size={64} className="p-1" />
+                  <span className="text-[9px] text-slate-500 font-mono mt-0.5">Scan to Verify</span>
+                </div>
+
+                <div className="text-right font-bold text-xs sm:text-sm text-black">
+                  <div className="h-8 border-b border-slate-400 mb-1 w-32 sm:w-40 ml-auto" />
+                  <p>Director / Authorized Signatory</p>
+                  <p className="text-[10px] sm:text-xs text-slate-700 font-semibold">SUCCESS POINT COMPUTER INSTITUTE</p>
+                </div>
+              </div>
+
+              {/* Accreditation Badges Row */}
+              <div className="grid grid-cols-4 items-center justify-items-center gap-2 sm:gap-4 py-2 my-1 border-t border-slate-200">
+                {/* Badge 1: ISO 9001 */}
+                <div className="flex items-center justify-center">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-blue-900 bg-blue-50/50 p-1 flex flex-col items-center justify-center text-blue-900 relative shadow-sm">
+                    <div className="w-full h-full rounded-full border border-blue-800 border-dashed flex flex-col items-center justify-center p-0.5">
+                      <span className="text-[5px] sm:text-[6px] font-extrabold uppercase tracking-tighter text-blue-950">CERTIFIED</span>
+                      <span className="text-[7px] sm:text-[9px] font-black leading-none border-y border-blue-900 px-0.5 my-0.5 text-blue-900">ISO 9001</span>
+                      <span className="text-[5px] sm:text-[6px] font-extrabold uppercase tracking-tighter text-blue-950">CERTIFIED</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Badge 2: Digital India */}
+                <div className="flex items-center justify-center">
+                  <img
+                    src="/img/digitalindia.png"
+                    alt="Digital India - Power To Empower"
+                    className="h-8 sm:h-12 max-w-full object-contain"
                   />
-                ) : (
-                  <div className="w-24 h-28 border border-slate-600 border-dashed flex flex-col items-center justify-center text-slate-500 bg-slate-50">
-                    <User className="w-8 h-8 opacity-40" />
-                    <span className="text-xs font-semibold mt-1">Photo</span>
-                  </div>
-                )}
-              </div>
-            </div>
+                </div>
 
-            {/* Certification Body Text */}
-            <div className="space-y-3.5 text-xs sm:text-sm text-slate-900 leading-relaxed font-sans my-2">
-              <p>
-                this is to certify &nbsp;
-                <span className="font-bold underline text-black text-sm sm:text-base px-1">
-                  {studentName}
-                </span>
-              </p>
-              <p>
-                Father name Mr. &nbsp;
-                <span className="font-bold underline text-black px-1">
-                  {fatherName}
-                </span>
-              </p>
-              <p>
-                has completed &nbsp;
-                <span className="font-bold underline text-black px-1">{course}</span>
-                &nbsp; Course Duration : &nbsp;
-                <span className="font-bold underline text-black px-1">{duration}</span>
-              </p>
-              <p>
-                At{' '}
-                <span className="font-bold text-blue-700 font-sans text-xs sm:text-sm">
-                  success point computer instutite (rudrapur udam singh nagar uttrakhand)
-                </span>
-              </p>
-              <p>
-                with the following subject computer &nbsp;
-                <span className="font-bold underline text-black px-1">{subject}</span>
-              </p>
-              <p>
-                he/she has scored &nbsp;
-                <span className="font-bold underline text-black px-1">{marks}</span>
-                &nbsp; Marks.
-              </p>
-              <p>
-                with Grade &nbsp;
-                <span className="font-bold underline text-black px-1">"{grade}"</span>
-              </p>
-            </div>
+                {/* Badge 3: Skill India */}
+                <div className="flex items-center justify-center">
+                  <img
+                    src="/img/skillindia.jpeg"
+                    alt="Skill India - कौशल भारत - कुशल भारत"
+                    className="h-8 sm:h-12 max-w-full object-contain"
+                  />
+                </div>
 
-            {/* Signatures Row */}
-            <div className="flex items-end justify-between pt-8 pb-4 my-2 border-b border-slate-200">
-              <div className="text-left font-bold text-xs sm:text-sm text-black">
-                <div className="h-8 border-b border-slate-400 mb-1" />
-                Controller Of Exam
-              </div>
-              <div className="text-right font-bold text-xs sm:text-sm text-black">
-                <div className="h-8 border-b border-slate-400 mb-1" />
-                SUCCESS POINT COMPUTER
-              </div>
-            </div>
-
-            {/* Accreditation Badges Row */}
-            <div className="grid grid-cols-4 items-center justify-between gap-2 py-2">
-              {/* Badge 1: ISO 9001 */}
-              <div className="flex flex-col items-center justify-center text-center">
-                <div className="w-14 h-14 rounded-full border-2 border-blue-900 bg-blue-50/50 p-1 flex flex-col items-center justify-center text-blue-900 relative shadow-sm">
-                  <div className="w-full h-full rounded-full border border-blue-800 border-dashed flex flex-col items-center justify-center p-0.5">
-                    <span className="text-[6px] font-extrabold uppercase tracking-tighter">CERTIFIED</span>
-                    <span className="text-[8px] font-black leading-tight border-y border-blue-900 px-0.5 my-0.5">ISO 9001</span>
-                    <span className="text-[6px] font-extrabold uppercase tracking-tighter">CERTIFIED</span>
-                  </div>
+                {/* Badge 4: MSME */}
+                <div className="flex items-center justify-center">
+                  <img
+                    src="/img/msme.jpeg"
+                    alt="Ministry of MSME, Govt. of India"
+                    className="h-8 sm:h-12 max-w-full object-contain"
+                  />
                 </div>
               </div>
 
-              {/* Badge 2: Digital India */}
-              <div className="flex items-center justify-center">
-                <Image
-                  src="/img/digitalindia.png"
-                  alt="Digital India - Power To Empower"
-                  width={110}
-                  height={50}
-                  className="h-10 sm:h-12 w-auto object-contain"
-                />
+              {/* Office Address & Footer Info */}
+              <div className="pt-2 text-left space-y-0.5 text-[10px] sm:text-xs text-slate-900 font-sans border-t border-slate-300">
+                <p className="font-bold">Office Address:</p>
+                <p>Azad Nagar Ward No-07, Transit Camp Rudrapur, Udham Singh Nagar, Uttarakhand-263153.</p>
+                <p>Website: <span className="font-semibold text-blue-800">www.successpointrdr.in</span> &nbsp;|&nbsp; Email: <span className="font-semibold text-slate-800">info.success.get@gmail.com</span></p>
               </div>
-
-              {/* Badge 3: Skill India */}
-              <div className="flex flex-col items-center text-center leading-none">
-                <div className="w-6 h-5 mb-0.5">
-                  <svg viewBox="0 0 100 80" className="w-full h-full">
-                    <rect x="15" y="10" width="70" height="45" rx="4" fill="#0284c7" />
-                    <rect x="22" y="16" width="56" height="33" fill="#ffffff" />
-                    <polygon points="50,20 60,38 40,38" fill="#f97316" />
-                    <rect x="42" y="55" width="16" height="15" fill="#334155" />
-                    <rect x="30" y="70" width="40" height="6" fill="#334155" />
-                  </svg>
-                </div>
-                <span className="font-extrabold text-[9px] text-blue-950">Skill India</span>
-                <span className="text-[6px] text-slate-700">कौशल भारत - कुशल भारत</span>
-              </div>
-
-              {/* Badge 4: MSME */}
-              <div className="flex items-center gap-1 border-l border-slate-300 pl-1.5">
-                <div className="w-5 h-7 shrink-0">
-                  <svg viewBox="0 0 40 50" className="w-full h-full text-slate-800">
-                    <path d="M20 2 L24 8 L32 8 L27 14 L29 22 L20 17 L11 22 L13 14 L8 8 L16 8 Z" fill="#94a3b8" stroke="#475569" strokeWidth="1" />
-                    <rect x="12" y="24" width="16" height="16" fill="#475569" />
-                    <rect x="16" y="40" width="8" height="6" fill="#1e293b" />
-                  </svg>
-                </div>
-                <div className="leading-none text-[6px]">
-                  <span className="block font-black text-[9px] text-slate-900">MSME</span>
-                  <span className="block text-[6px] text-slate-700 font-bold">MICRO, SMALL & MEDIUM</span>
-                  <span className="block text-[5.5px] text-slate-600">Ministry of MSME, Govt. of India</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Office Address & Footer Info */}
-            <div className="pt-2 text-left space-y-0.5 text-[10px] sm:text-xs text-slate-900 font-sans border-t border-slate-300">
-              <p className="font-bold">Office Address:</p>
-              <p>Azad Nagar Ward No-07, Transit Camp Rudrapur, Udham Singh Nagar, Uttrakhand-263153.</p>
-              <p>website: <span className="font-semibold text-blue-800">www.successpointrdr.in</span></p>
-              <p>email: <span className="font-semibold text-slate-800">info.success.get@gmail.com</span></p>
             </div>
           </div>
         ) : (
@@ -454,18 +578,60 @@ export function CertificateCard({ student, showActions = true }: CertificateCard
             <div className="grid grid-cols-3 items-end pt-6 border-t border-slate-200 relative z-10">
               {/* Left: Issue Details & Student Photo */}
               <div className="flex items-center gap-3 text-left">
-                {student.profile_picture_url ? (
-                  <Image
-                    src={student.profile_picture_url}
-                    alt={studentName}
-                    width={56}
-                    height={56}
-                    className="w-14 h-14 rounded-lg object-cover border border-slate-300 shadow-sm"
-                  />
-                ) : (
-                  <div className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-400">
-                    <User className="w-7 h-7" />
+                {currentPhoto ? (
+                  <div className="relative group">
+                    {currentPhoto.startsWith('data:') ? (
+                      <img
+                        src={currentPhoto}
+                        alt={studentName}
+                        className="w-14 h-14 rounded-lg object-cover border border-slate-300 shadow-sm"
+                      />
+                    ) : (
+                      <Image
+                        src={currentPhoto}
+                        alt={studentName}
+                        width={56}
+                        height={56}
+                        className="w-14 h-14 rounded-lg object-cover border border-slate-300 shadow-sm"
+                      />
+                    )}
+                    {showActions && (
+                      <label
+                        className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold cursor-pointer transition-opacity rounded-lg print:hidden"
+                        title="Click to Change Student Photo"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoSelect}
+                          className="hidden"
+                          disabled={isUploadingPhoto}
+                        />
+                      </label>
+                    )}
                   </div>
+                ) : (
+                  <label
+                    className={`w-14 h-14 rounded-lg bg-slate-100 border border-slate-300 border-dashed flex flex-col items-center justify-center text-slate-400 ${showActions ? 'cursor-pointer hover:bg-slate-200 hover:border-amber-600 hover:text-amber-700 transition-colors' : ''
+                      }`}
+                    title={showActions ? "Click to Upload Student Photo" : "Student Photo"}
+                  >
+                    {isUploadingPhoto ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-amber-600" />
+                    ) : (
+                      <User className="w-6 h-6" />
+                    )}
+                    {showActions && (
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePhotoSelect}
+                        className="hidden"
+                        disabled={isUploadingPhoto}
+                      />
+                    )}
+                  </label>
                 )}
                 <div className="space-y-0.5 text-xs text-slate-600">
                   <p>

@@ -40,7 +40,9 @@ export default function AdminStudentsPage() {
 
   // File Upload State
   const [addCertFile, setAddCertFile] = useState<File | null>(null);
+  const [addPhotoFile, setAddPhotoFile] = useState<File | null>(null);
   const [editCertFile, setEditCertFile] = useState<File | null>(null);
+  const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
 
   // Edit Modal State
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
@@ -115,7 +117,7 @@ export default function AdminStudentsPage() {
 
     setIsSubmitting(true);
     try {
-      await createStudent(newStudent, addCertFile);
+      await createStudent(newStudent, addCertFile, addPhotoFile);
       await refreshStudents();
       setShowAddModal(false);
       showToast(`Successfully added student ${newStudent.student_name}`);
@@ -132,6 +134,7 @@ export default function AdminStudentsPage() {
         certificate_url: '',
       });
       setAddCertFile(null);
+      setAddPhotoFile(null);
     } catch (err: any) {
       console.error('Error adding student:', err);
       showToast(err?.message || 'Failed to add student. Please try again.');
@@ -164,11 +167,12 @@ export default function AdminStudentsPage() {
 
     setIsSubmitting(true);
     try {
-      await updateStudent(editingStudent.id, editingStudent, editCertFile);
+      await updateStudent(editingStudent.id, editingStudent, editCertFile, editPhotoFile);
       await refreshStudents();
       setShowEditModal(false);
       setEditingStudent(null);
       setEditCertFile(null);
+      setEditPhotoFile(null);
       showToast(`Updated student record for ${editingStudent.student_name || editingStudent.name} in Supabase!`);
     } catch (err: any) {
       console.error('Error updating student:', err);
@@ -532,10 +536,28 @@ export default function AdminStudentsPage() {
                 </div>
               </div>
 
+              {/* Student Photo Upload */}
+              <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                <label className="block text-slate-500 font-semibold">
+                  📷 Student Photo / Passport Image (Appears on Certificate)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setAddPhotoFile(e.target.files?.[0] || null)}
+                  className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {addPhotoFile && (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                    Selected photo: {addPhotoFile.name} ({(addPhotoFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+
               {/* Certificate File Upload */}
               <div className="space-y-1 pt-1">
                 <label className="block text-slate-500 font-semibold">
-                  Certificate PDF / Image File (Uploads to 'certificates' bucket)
+                  📄 Certificate PDF / Image File
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -719,10 +741,33 @@ export default function AdminStudentsPage() {
                 </div>
               </div>
 
+              {/* Student Photo Upload */}
+              <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                <label className="block text-slate-500 font-semibold">
+                  📷 Upload / Replace Student Photo
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setEditPhotoFile(e.target.files?.[0] || null)}
+                  className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                />
+                {(editingStudent.profile_picture_url || editingStudent.photo_url || editingStudent.student_image) && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <img
+                      src={editingStudent.profile_picture_url || editingStudent.photo_url || editingStudent.student_image!}
+                      alt="Current student photo"
+                      className="w-10 h-10 rounded object-cover border border-slate-300"
+                    />
+                    <span className="text-[11px] text-slate-500 font-medium">Current photo set</span>
+                  </div>
+                )}
+              </div>
+
               {/* Certificate File Upload */}
               <div className="space-y-1 pt-1">
                 <label className="block text-slate-500 font-semibold">
-                  Upload / Replace Certificate File
+                  📄 Upload / Replace Certificate File
                 </label>
                 <input
                   type="file"

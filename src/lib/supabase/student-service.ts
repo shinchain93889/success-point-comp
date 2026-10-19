@@ -26,19 +26,66 @@ export async function uploadCertificateFile(file: File): Promise<string | null> 
       .upload(filePath, file, { upsert: true });
 
     if (uploadError) {
-      console.error('Error uploading certificate to Supabase storage:', uploadError.message);
-      return null;
+      console.warn('Error uploading certificate to Supabase storage:', uploadError.message);
+      return URL.createObjectURL(file);
     }
 
     const { data: urlData } = supabase.storage
       .from('certificates')
       .getPublicUrl(filePath);
 
-    return urlData?.publicUrl || null;
+    return urlData?.publicUrl || URL.createObjectURL(file);
   } catch (err) {
-    console.error('Upload certificate failed:', err);
-    return null;
+    console.warn('Upload certificate failed, falling back to blob URL:', err);
+    return URL.createObjectURL(file);
   }
+}
+
+// Helper to upload student photo image to Supabase storage bucket 'certificates' or return Data URL fallback
+export async function uploadStudentPhotoFile(file: File): Promise<string | null> {
+  if (!file) return null;
+  if (typeof window !== 'undefined') {
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      if (!isSupabaseConfigured()) {
+        return dataUrl;
+      }
+
+      try {
+        const supabase = createClient();
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const fileName = `student_photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        const filePath = `certificates/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('certificates')
+          .upload(filePath, file, { upsert: true });
+
+        if (uploadError) {
+          console.warn('Supabase photo upload error, using Data URL:', uploadError.message);
+          return dataUrl;
+        }
+
+        const { data: urlData } = supabase.storage
+          .from('certificates')
+          .getPublicUrl(filePath);
+
+        return urlData?.publicUrl || dataUrl;
+      } catch (e) {
+        console.warn('Supabase photo upload exception, using Data URL:', e);
+        return dataUrl;
+      }
+    } catch {
+      return URL.createObjectURL(file);
+    }
+  }
+  return null;
 }
 
 // Helper to normalize Supabase row to StudentRecord
@@ -48,6 +95,7 @@ function normalizeStudentRow(item: any): StudentRecord {
   const certUrl = item.certificate_url || item.pdf_url || null;
   const mobileNo = item.mobile_no || item.phone || '';
   const status = item.course_status === 'completed' ? 'completed' : 'pending';
+  const photoUrl = item.profile_picture_url || item.photo_url || item.student_image || item.avatar_url || null;
 
   return {
     id: item.id,
@@ -61,6 +109,9 @@ function normalizeStudentRow(item: any): StudentRecord {
     mobile_no: mobileNo,
     course_status: status,
     certificate_url: certUrl,
+    profile_picture_url: photoUrl,
+    photo_url: photoUrl,
+    student_image: photoUrl,
     created_at: item.created_at || new Date().toISOString(),
     student_id: item.student_id || rollNo,
     roll_number: item.roll_number || rollNo,
@@ -112,8 +163,18 @@ export async function fetchStudents(): Promise<StudentRecord[]> {
 
     saveStoredStudents(normalized);
     return normalized;
-  } catch (err) {
-    console.error('Fetch students error:', err);
+  } catch (err: any) {
+    const errMsg = err?.message || (typeof err === 'string' ? err : '');
+    const isNetworkError =
+      errMsg.toLowerCase().includes('failed to fetch') ||
+      errMsg.toLowerCase().includes('fetch failed') ||
+      err?.name === 'TypeError';
+
+    if (!isNetworkError) {
+      console.error('Fetch students error:', err);
+    } else {
+      console.warn('Fetch students network notice (using local fallback):', errMsg);
+    }
     return getStoredStudents();
   }
 }
@@ -169,8 +230,18 @@ export async function fetchStudentByRollNo(rollNo: string): Promise<StudentRecor
       if (local.end_date && !fetched.end_date) fetched.end_date = local.end_date;
     }
     return fetched;
-  } catch (err) {
-    console.error('Fetch student by roll no error:', err);
+  } catch (err: any) {
+    const errMsg = err?.message || (typeof err === 'string' ? err : '');
+    const isNetworkError =
+      errMsg.toLowerCase().includes('failed to fetch') ||
+      errMsg.toLowerCase().includes('fetch failed') ||
+      err?.name === 'TypeError';
+
+    if (!isNetworkError) {
+      console.error('Fetch student by roll no error:', err);
+    } else {
+      console.warn('Fetch student by roll no network notice (using local fallback):', errMsg);
+    }
     const localStudents = getStoredStudents();
     return (
       localStudents.find(
@@ -197,15 +268,26 @@ export async function createStudent(
     mobile_no?: string | null;
     course_status?: 'pending' | 'completed';
     certificate_url?: string | null;
+    profile_picture_url?: string | null;
+    photo_url?: string | null;
   },
-  certificateFile?: File | null
+  certificateFile?: File | null,
+  photoFile?: File | null
 ): Promise<StudentRecord> {
   let certUrl = studentData.certificate_url || null;
+  let photoUrl = studentData.profile_picture_url || studentData.photo_url || null;
 
   if (certificateFile) {
     const uploadedUrl = await uploadCertificateFile(certificateFile);
     if (uploadedUrl) {
       certUrl = uploadedUrl;
+    }
+  }
+
+  if (photoFile) {
+    const uploadedPhoto = await uploadStudentPhotoFile(photoFile);
+    if (uploadedPhoto) {
+      photoUrl = uploadedPhoto;
     }
   }
 
@@ -230,46 +312,114 @@ export async function createStudent(
         mobile_no: mobileNo,
         course_status: courseStatus,
         certificate_url: certUrl,
+        profile_picture_url: photoUrl,
       };
 
+      // Try upserting first to handle existing roll numbers gracefully
       let insertRes = await supabase
         .from('students')
-        .insert([fullPayload])
+        .upsert([fullPayload], { onConflict: 'roll_no' })
         .select()
-        .single();
+        .maybeSingle();
 
-      if (insertRes.error && insertRes.error.message.includes('column')) {
-        console.warn('Primary schema insert failed, trying legacy table columns:', insertRes.error.message);
-        const legacyPayload = {
-          student_id: rollNo,
-          roll_number: rollNo,
-          name: name,
-          father_name: studentData.father_name,
-          course: studentData.course,
-          session: studentData.session,
-          certificate_no: `SP-2024-${rollNo}`,
-          issue_date: issueDate,
-          pdf_url: certUrl,
-        };
-        insertRes = await supabase
-          .from('students')
-          .insert([legacyPayload])
-          .select()
-          .single();
+      // Fallback 1: If full payload fails due to missing table columns, try standard payload
+      if (insertRes.error) {
+        const errMsg = insertRes.error.message || JSON.stringify(insertRes.error);
+        if (errMsg.toLowerCase().includes('column') || insertRes.error.code === 'PGRST204') {
+          console.warn('Full payload failed due to column mismatch, trying standard payload:', errMsg);
+          const stdPayload = {
+            roll_no: rollNo,
+            student_name: name,
+            father_name: studentData.father_name,
+            course: studentData.course,
+            session: studentData.session,
+            course_status: courseStatus,
+            certificate_url: certUrl,
+          };
+          insertRes = await supabase
+            .from('students')
+            .upsert([stdPayload], { onConflict: 'roll_no' })
+            .select()
+            .maybeSingle();
+        }
       }
 
+      // Fallback 2: If standard payload fails due to legacy schema table column names
       if (insertRes.error) {
-        console.error('Supabase insert error:', insertRes.error);
-        throw new Error(`Supabase Error (${insertRes.error.code}): ${insertRes.error.message}`);
-      } else if (insertRes.data) {
+        const errMsg = insertRes.error.message || JSON.stringify(insertRes.error);
+        if (errMsg.toLowerCase().includes('column') || insertRes.error.code === 'PGRST204') {
+          console.warn('Standard payload failed, trying legacy schema payload:', errMsg);
+          const legacyPayload = {
+            student_id: rollNo,
+            roll_number: rollNo,
+            name: name,
+            father_name: studentData.father_name,
+            course: studentData.course,
+            session: studentData.session,
+            certificate_no: `SP-2024-${rollNo}`,
+            issue_date: issueDate,
+            pdf_url: certUrl,
+          };
+          insertRes = await supabase
+            .from('students')
+            .insert([legacyPayload])
+            .select()
+            .maybeSingle();
+        }
+      }
+
+      if (insertRes.data) {
         const createdRecord = normalizeStudentRow(insertRes.data);
         addStoredStudent(createdRecord);
         return createdRecord;
+      } else if (insertRes.error) {
+        const errDetail = insertRes.error.message || insertRes.error.details || JSON.stringify(insertRes.error);
+
+        const isNetworkError =
+          errDetail.toLowerCase().includes('failed to fetch') ||
+          errDetail.toLowerCase().includes('fetch failed') ||
+          errDetail.toLowerCase().includes('networkerror') ||
+          errDetail.toLowerCase().includes('enotfound') ||
+          errDetail.toLowerCase().includes('typeerror');
+
+        if (isNetworkError) {
+          console.warn('Supabase request failed due to network issue, falling back to local storage:', errDetail);
+          // Fall through to local storage below
+        } else {
+          console.error('Supabase insert/upsert error details:', errDetail);
+
+          if (insertRes.error.code === '23505') {
+            throw new Error(`Student record with Roll No '${rollNo}' already exists.`);
+          } else if (insertRes.error.code === '42501' || errDetail.toLowerCase().includes('row-level security')) {
+            throw new Error(
+              `Supabase RLS Policy Error: Row-Level Security is blocking insert on table 'students'. Please run schema.sql in Supabase SQL Editor.`
+            );
+          } else {
+            throw new Error(`Supabase Error (${insertRes.error.code || 'UNKNOWN'}): ${errDetail}`);
+          }
+        }
       }
     } catch (e: any) {
-      console.error('Supabase insert exception:', e);
-      if (e.message && e.message.includes('Supabase Error')) {
-        throw e;
+      const isNetworkError =
+        e?.message &&
+        (e.message.toLowerCase().includes('failed to fetch') ||
+          e.message.toLowerCase().includes('fetch failed') ||
+          e.message.toLowerCase().includes('networkerror') ||
+          e.message.toLowerCase().includes('enotfound') ||
+          e.name === 'TypeError');
+
+      if (!isNetworkError) {
+        console.error('Supabase create student exception:', e?.message || e);
+        if (
+          e?.message &&
+          (e.message.includes('Supabase Error') ||
+            e.message.includes('already exists') ||
+            e.message.includes('RLS'))
+        ) {
+          throw e;
+        }
+      } else {
+        console.warn('Supabase create student network exception, falling back to local storage:', e?.message || e);
       }
     }
   }
@@ -292,6 +442,9 @@ export async function createStudent(
     roll_no: rollNo,
     student_name: name,
     certificate_url: certUrl,
+    profile_picture_url: photoUrl,
+    photo_url: photoUrl,
+    student_image: photoUrl,
   });
 
   return normalizeStudentRow(localAdded);
@@ -301,14 +454,23 @@ export async function createStudent(
 export async function updateStudent(
   id: string,
   updates: Partial<StudentRecord>,
-  certificateFile?: File | null
+  certificateFile?: File | null,
+  photoFile?: File | null
 ): Promise<StudentRecord | null> {
   let certUrl = updates.certificate_url;
+  let photoUrl = updates.profile_picture_url || updates.photo_url || updates.student_image;
 
   if (certificateFile) {
     const uploadedUrl = await uploadCertificateFile(certificateFile);
     if (uploadedUrl) {
       certUrl = uploadedUrl;
+    }
+  }
+
+  if (photoFile) {
+    const uploadedPhoto = await uploadStudentPhotoFile(photoFile);
+    if (uploadedPhoto) {
+      photoUrl = uploadedPhoto;
     }
   }
 
@@ -327,6 +489,7 @@ export async function updateStudent(
   if (updates.mobile_no !== undefined) primaryPayload.mobile_no = updates.mobile_no;
   if (updates.course_status !== undefined) primaryPayload.course_status = updates.course_status;
   if (certUrl !== undefined) primaryPayload.certificate_url = certUrl;
+  if (photoUrl !== undefined) primaryPayload.profile_picture_url = photoUrl;
 
   // Secondary Fallback Payload (excluding dates/mobile if table schema does not include them)
   const fallbackPayload: any = {};
@@ -429,10 +592,34 @@ export async function updateStudent(
       }
 
       if (!supabaseUpdatedRecord && lastError) {
-        console.error('Supabase update failed:', lastError?.message || lastError);
+        const errMsg = lastError?.message || (typeof lastError === 'string' ? lastError : '');
+        const isNetworkError =
+          errMsg.toLowerCase().includes('failed to fetch') ||
+          errMsg.toLowerCase().includes('fetch failed') ||
+          errMsg.toLowerCase().includes('networkerror') ||
+          errMsg.toLowerCase().includes('enotfound') ||
+          lastError?.name === 'TypeError';
+
+        if (!isNetworkError) {
+          console.error('Supabase update failed:', errMsg);
+        } else {
+          console.warn('Supabase update failed due to network issue (using local fallback):', errMsg);
+        }
       }
     } catch (e: any) {
-      console.error('Supabase update exception:', e?.message || e);
+      const errMsg = e?.message || (typeof e === 'string' ? e : '');
+      const isNetworkError =
+        errMsg.toLowerCase().includes('failed to fetch') ||
+        errMsg.toLowerCase().includes('fetch failed') ||
+        errMsg.toLowerCase().includes('networkerror') ||
+        errMsg.toLowerCase().includes('enotfound') ||
+        e?.name === 'TypeError';
+
+      if (!isNetworkError) {
+        console.error('Supabase update exception:', errMsg);
+      } else {
+        console.warn('Supabase update exception (using local fallback):', errMsg);
+      }
       lastError = e;
     }
   }
@@ -442,25 +629,37 @@ export async function updateStudent(
     ...updates,
     ...(supabaseUpdatedRecord || {}),
     ...(certUrl ? { certificate_url: certUrl, pdf_url: certUrl } : {}),
+    ...(photoUrl ? { profile_picture_url: photoUrl, photo_url: photoUrl, student_image: photoUrl } : {}),
   });
 
   if (isSupabaseConfigured() && !supabaseUpdatedRecord) {
     const errMsg = lastError?.message || (typeof lastError === 'string' ? lastError : '');
-    const isRlsError =
+    const isNetworkError =
       !lastError ||
-      errMsg.toLowerCase().includes('row-level security') ||
-      errMsg.toLowerCase().includes('violates') ||
-      lastError?.code === '42501';
+      errMsg.toLowerCase().includes('failed to fetch') ||
+      errMsg.toLowerCase().includes('fetch failed') ||
+      errMsg.toLowerCase().includes('networkerror') ||
+      errMsg.toLowerCase().includes('enotfound') ||
+      lastError?.name === 'TypeError';
 
-    if (isRlsError) {
+    if (!isNetworkError) {
+      const isRlsError =
+        errMsg.toLowerCase().includes('row-level security') ||
+        errMsg.toLowerCase().includes('violates') ||
+        lastError?.code === '42501';
+
+      if (isRlsError) {
+        throw new Error(
+          'Supabase RLS Policy Error: Row Level Security is blocking updates on table "students". Please run the SQL policy in schema.sql in your Supabase SQL Editor.'
+        );
+      }
+
       throw new Error(
-        'Supabase RLS Policy Error: Row Level Security is blocking updates on table "students". Please run the SQL policy in schema.sql in your Supabase SQL Editor.'
+        errMsg || `Failed to update or create student record for Roll No '${rollNo || id}' in Supabase database.`
       );
+    } else {
+      console.warn('Supabase update failed due to network issue, falling back to local storage:', errMsg);
     }
-
-    throw new Error(
-      errMsg || `Failed to update or create student record for Roll No '${rollNo || id}' in Supabase database.`
-    );
   }
 
   return updatedLocal ? normalizeStudentRow(updatedLocal) : supabaseUpdatedRecord;

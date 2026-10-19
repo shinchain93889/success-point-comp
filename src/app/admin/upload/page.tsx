@@ -46,6 +46,7 @@ function AdminUploadPageContent() {
     certificate_url: '',
   });
   const [singleCertFile, setSingleCertFile] = useState<File | null>(null);
+  const [singlePhotoFile, setSinglePhotoFile] = useState<File | null>(null);
 
   useEffect(() => {
     const currentUser = getCurrentPortalUser();
@@ -147,7 +148,7 @@ function AdminUploadPageContent() {
     setParseError('');
 
     try {
-      await createStudent(singleStudent, singleCertFile);
+      await createStudent(singleStudent, singleCertFile, singlePhotoFile);
       setUploadSuccess(`Single student record created in Supabase for ${singleStudent.student_name} (Roll No: ${singleStudent.roll_no})! Course status: ${singleStudent.course_status.toUpperCase()}`);
       setSingleStudent({
         roll_no: '',
@@ -162,6 +163,7 @@ function AdminUploadPageContent() {
         certificate_url: '',
       });
       setSingleCertFile(null);
+      setSinglePhotoFile(null);
     } catch (err: any) {
       console.error('Single submit error:', err);
       setParseError(`Failed to add student to Supabase: ${err.message || 'Check database permissions.'}`);
@@ -448,10 +450,28 @@ function AdminUploadPageContent() {
                   </select>
                 </div>
 
+                {/* Student Photo Upload */}
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    📷 Student Photo / Passport Image (Appears on Certificate)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setSinglePhotoFile(e.target.files?.[0] || null)}
+                    className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  {singlePhotoFile && (
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
+                      Selected photo: {singlePhotoFile.name} ({(singlePhotoFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                </div>
+
                 {/* Certificate File Upload */}
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Certificate PDF / Image File (Uploads to Supabase 'certificates' bucket)
+                    📄 Certificate PDF / Image File
                   </label>
                   <input
                     type="file"

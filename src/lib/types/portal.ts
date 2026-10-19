@@ -37,6 +37,8 @@ export interface StudentRecord {
   issue_date?: string;
   phone?: string | null;
   profile_picture_url?: string | null;
+  photo_url?: string | null;
+  student_image?: string | null;
   pdf_url?: string | null;
 }
 

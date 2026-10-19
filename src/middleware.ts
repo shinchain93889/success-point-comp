@@ -7,11 +7,28 @@ export async function middleware(request: NextRequest) {
   // 1. Refresh Supabase session cookies
   const { supabaseResponse, supabase, user } = await updateSession(request);
 
+  // Determine configured admin email
+  const envAdminEmail = (
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
+    process.env.ADMIN_EMAIL ||
+    'admin@gmail.com'
+  ).toLowerCase().trim();
+
+  // Check fallback client cookie for demo/localStorage session sync
+  const clientUserCookie = request.cookies.get('sp_portal_user_role')?.value;
+
   // 2. Fetch user profile role if authenticated
   let userRole: 'admin' | 'student' | null = null;
   let userRollNo: string | null = null;
 
   if (user) {
+    const userEmail = user.email?.toLowerCase().trim() || '';
+    const isAdminByEmail =
+      userEmail === envAdminEmail ||
+      userEmail === 'admin@gmail.com' ||
+      userEmail.startsWith('admin@') ||
+      user.user_metadata?.role === 'admin';
+
     // Attempt profile fetch from Supabase
     try {
       const { data: profile } = await supabase
@@ -20,23 +37,38 @@ export async function middleware(request: NextRequest) {
         .eq('id', user.id)
         .maybeSingle();
 
-      if (profile) {
-        userRole = (profile.role as 'admin' | 'student') || 'student';
+      if (profile && profile.role) {
+        userRole = profile.role as 'admin' | 'student';
         userRollNo = profile.roll_no || null;
+      } else if (isAdminByEmail) {
+        userRole = 'admin';
+      } else if (clientUserCookie === 'admin') {
+        userRole = 'admin';
       } else {
-        // Fallback to user metadata or default
         userRole = (user.user_metadata?.role as 'admin' | 'student') || 'student';
         userRollNo = user.user_metadata?.roll_no || user.user_metadata?.student_id || null;
       }
     } catch {
-      userRole = (user.user_metadata?.role as 'admin' | 'student') || 'student';
+      if (isAdminByEmail || clientUserCookie === 'admin') {
+        userRole = 'admin';
+      } else {
+        userRole = (user.user_metadata?.role as 'admin' | 'student') || 'student';
+      }
     }
-  } else {
-    // Check fallback client cookie for demo/localStorage session sync
-    const clientUserCookie = request.cookies.get('sp_portal_user_role')?.value;
+  }
+
+  // If user is not present or userRole is not yet resolved, check cookie
+  if (!userRole) {
     if (clientUserCookie === 'admin' || clientUserCookie === 'student') {
       userRole = clientUserCookie;
     }
+  }
+
+  // Handle root /admin or /admin/ direct requests
+  if (pathname === '/admin' || pathname === '/admin/') {
+    const url = request.nextUrl.clone();
+    url.pathname = userRole === 'admin' ? '/admin/dashboard' : '/admin/login';
+    return NextResponse.redirect(url);
   }
 
   // 3. Admin Routes Protection (/admin/*)
@@ -112,8 +144,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    '/admin',
     '/admin/:path*',
     '/student/:path*',
     '/login',
   ],
 };
+

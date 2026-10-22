@@ -6,6 +6,7 @@ import { PortalNav } from '@/components/portal/portal-nav';
 import { getCurrentPortalUser, addAuditLog } from '@/lib/supabase/mock-data';
 import { createStudent, uploadCertificateFile } from '@/lib/supabase/student-service';
 import { UserProfile, BulkUploadRow } from '@/lib/types/portal';
+import { INSTITUTE_COURSES, COURSE_SUBJECT_PRESETS } from '@/components/portal/certificate-card';
 import Papa from 'papaparse';
 import {
   FileSpreadsheet,
@@ -37,7 +38,9 @@ function AdminUploadPageContent() {
     roll_no: '',
     student_name: '',
     father_name: '',
+    mother_name: '',
     course: 'Diploma in Computer Application (DCA)',
+    subject: 'Computer Fundamentals, Operating Systems & MS Office',
     session: '2023-2024',
     start_date: '',
     end_date: '',
@@ -85,7 +88,9 @@ function AdminUploadPageContent() {
             roll_number: rollNo,
             name: name,
             father_name: row.father_name || row['Father Name'] || row['fatherName'] || 'Father Name',
+            mother_name: row.mother_name || row['Mother Name'] || row['motherName'] || '',
             course: row.course || row['Course'] || 'Diploma in Computer Application (DCA)',
+            subject: row.subject || row['Subject'] || row['subject_name'] || row.course || 'Diploma in Computer Application (DCA)',
             session: row.session || row['Session'] || '2023-2024',
             start_date: startDate,
             end_date: endDate,
@@ -118,6 +123,7 @@ function AdminUploadPageContent() {
           roll_no: row.roll_number || row.student_id,
           student_name: row.name,
           father_name: row.father_name,
+          mother_name: row.mother_name,
           course: row.course,
           session: row.session,
           start_date: row.start_date,
@@ -154,7 +160,9 @@ function AdminUploadPageContent() {
         roll_no: '',
         student_name: '',
         father_name: '',
+        mother_name: '',
         course: 'Diploma in Computer Application (DCA)',
+        subject: 'Computer Fundamentals, Operating Systems & MS Office',
         session: '2023-2024',
         start_date: '',
         end_date: '',
@@ -175,9 +183,9 @@ function AdminUploadPageContent() {
   const downloadSampleCSV = () => {
     const csvContent =
       'data:text/csv;charset=utf-8,' +
-      'roll_no,student_name,father_name,course,session,start_date,end_date,mobile_no,course_status\n' +
-      'TEST001,Test Student,Test Father,DCA,2023-2024,2023-07-01,2024-06-30,+91 9999999999,pending\n' +
-      '10110,Rohan Verma,Sanjay Verma,Diploma in Computer Application (DCA),2023-2024,2023-07-01,2024-06-30,+91 9876543210,completed\n';
+      'roll_no,student_name,father_name,mother_name,course,session,start_date,end_date,mobile_no,course_status\n' +
+      'TEST001,Test Student,Test Father,Test Mother,DCA,2023-2024,2023-07-01,2024-06-30,+91 9999999999,pending\n' +
+      '10110,Rohan Verma,Sanjay Verma,Sunita Verma,Diploma in Computer Application (DCA),2023-2024,2023-07-01,2024-06-30,+91 9876543210,completed\n';
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
@@ -256,7 +264,7 @@ function AdminUploadPageContent() {
                   Drop your CSV file here or click to browse
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Supported format: .csv (Headers: roll_no, student_name, father_name, course, session)
+                  Supported format: .csv (Headers: roll_no, student_name, father_name, mother_name, course, session)
                 </p>
               </div>
 
@@ -314,6 +322,7 @@ function AdminUploadPageContent() {
                         <th className="px-3 py-2">Roll No</th>
                         <th className="px-3 py-2">Student Name</th>
                         <th className="px-3 py-2">Father Name</th>
+                        <th className="px-3 py-2">Mother Name</th>
                         <th className="px-3 py-2">Course</th>
                         <th className="px-3 py-2">Session</th>
                       </tr>
@@ -326,6 +335,7 @@ function AdminUploadPageContent() {
                           </td>
                           <td className="px-3 py-2 font-bold">{r.name}</td>
                           <td className="px-3 py-2">{r.father_name}</td>
+                          <td className="px-3 py-2 text-slate-500">{r.mother_name || '-'}</td>
                           <td className="px-3 py-2 text-amber-600">{r.course}</td>
                           <td className="px-3 py-2">{r.session}</td>
                         </tr>
@@ -381,6 +391,17 @@ function AdminUploadPageContent() {
                 </div>
 
                 <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mother Name (Optional)</label>
+                  <input
+                    type="text"
+                    value={singleStudent.mother_name}
+                    onChange={(e) => setSingleStudent({ ...singleStudent, mother_name: e.target.value })}
+                    placeholder="e.g. Sunita Sharma"
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl"
+                  />
+                </div>
+
+                <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mobile Number</label>
                   <input
                     type="text"
@@ -396,8 +417,36 @@ function AdminUploadPageContent() {
                   <input
                     type="text"
                     required
+                    list="upload-courses-list"
                     value={singleStudent.course}
-                    onChange={(e) => setSingleStudent({ ...singleStudent, course: e.target.value })}
+                    onChange={(e) => {
+                      const newC = e.target.value;
+                      const suggestions = COURSE_SUBJECT_PRESETS[newC];
+                      setSingleStudent({
+                        ...singleStudent,
+                        course: newC,
+                        subject: suggestions?.[0] || singleStudent.subject || newC,
+                      });
+                    }}
+                    placeholder="e.g. Diploma in Computer Application (DCA)"
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl"
+                  />
+                  <datalist id="upload-courses-list">
+                    {INSTITUTE_COURSES.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Subject / Stream (in which student completed course)
+                  </label>
+                  <input
+                    type="text"
+                    value={singleStudent.subject}
+                    onChange={(e) => setSingleStudent({ ...singleStudent, subject: e.target.value })}
+                    placeholder="e.g. Computer Fundamentals, Operating Systems & MS Office"
                     className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl"
                   />
                 </div>

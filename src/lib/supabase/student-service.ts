@@ -102,6 +102,7 @@ function normalizeStudentRow(item: any): StudentRecord {
     roll_no: rollNo,
     student_name: name,
     father_name: item.father_name || '',
+    mother_name: item.mother_name || item.motherName || '',
     course: item.course || '',
     session: item.session || '',
     start_date: item.start_date || null,
@@ -261,7 +262,9 @@ export async function createStudent(
     roll_no: string;
     student_name: string;
     father_name: string;
+    mother_name?: string | null;
     course: string;
+    subject?: string | null;
     session: string;
     start_date?: string | null;
     end_date?: string | null;
@@ -305,7 +308,9 @@ export async function createStudent(
         roll_no: rollNo,
         student_name: name,
         father_name: studentData.father_name,
+        mother_name: studentData.mother_name || null,
         course: studentData.course,
+        subject: studentData.subject || studentData.course || null,
         session: studentData.session,
         start_date: studentData.start_date || null,
         end_date: studentData.end_date || null,
@@ -331,6 +336,7 @@ export async function createStudent(
             roll_no: rollNo,
             student_name: name,
             father_name: studentData.father_name,
+            mother_name: studentData.mother_name || null,
             course: studentData.course,
             session: studentData.session,
             course_status: courseStatus,
@@ -431,6 +437,7 @@ export async function createStudent(
     name: name,
     father_name: studentData.father_name,
     course: studentData.course,
+    subject: studentData.subject || studentData.course,
     session: studentData.session,
     start_date: studentData.start_date || null,
     end_date: studentData.end_date || null,
@@ -482,7 +489,9 @@ export async function updateStudent(
   if (rollNo) primaryPayload.roll_no = rollNo;
   if (name) primaryPayload.student_name = name;
   if (updates.father_name !== undefined) primaryPayload.father_name = updates.father_name;
+  if (updates.mother_name !== undefined) primaryPayload.mother_name = updates.mother_name;
   if (updates.course !== undefined) primaryPayload.course = updates.course;
+  if (updates.subject !== undefined) primaryPayload.subject = updates.subject;
   if (updates.session !== undefined) primaryPayload.session = updates.session;
   if (updates.start_date !== undefined) primaryPayload.start_date = updates.start_date;
   if (updates.end_date !== undefined) primaryPayload.end_date = updates.end_date;
@@ -496,6 +505,7 @@ export async function updateStudent(
   if (rollNo) fallbackPayload.roll_no = rollNo;
   if (name) fallbackPayload.student_name = name;
   if (updates.father_name !== undefined) fallbackPayload.father_name = updates.father_name;
+  if (updates.mother_name !== undefined) fallbackPayload.mother_name = updates.mother_name;
   if (updates.course !== undefined) fallbackPayload.course = updates.course;
   if (updates.session !== undefined) fallbackPayload.session = updates.session;
   if (updates.course_status !== undefined) fallbackPayload.course_status = updates.course_status;
@@ -569,6 +579,7 @@ export async function updateStudent(
           roll_no: targetRoll,
           student_name: name || updates.student_name || 'Student',
           father_name: updates.father_name || '',
+          mother_name: updates.mother_name || '',
           course: updates.course || 'Diploma in Computer Application (DCA)',
           session: updates.session || '2023-2024',
           start_date: updates.start_date || null,
@@ -671,6 +682,7 @@ export async function deleteStudent(id: string): Promise<boolean> {
   if (!cleanId) return false;
 
   let supabaseDeleted = false;
+  let isOfflineOrNetworkError = false;
 
   if (isSupabaseConfigured()) {
     try {
@@ -678,45 +690,104 @@ export async function deleteStudent(id: string): Promise<boolean> {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
 
       if (isUuid) {
-        const { error, count } = await supabase
-          .from('students')
-          .delete({ count: 'exact' })
-          .eq('id', cleanId);
-
-        if (!error && count !== null && count > 0) {
-          supabaseDeleted = true;
-        } else if (error) {
-          console.error('Supabase delete by id error:', error.message);
-        }
-      }
-
-      // Fallback: If not UUID or primary delete by ID didn't match any row, try deleting by standard roll_no column
-      if (!supabaseDeleted) {
-        const { error, count } = await supabase
-          .from('students')
-          .delete({ count: 'exact' })
-          .eq('roll_no', cleanId);
-
-        if (!error && count !== null && count > 0) {
-          supabaseDeleted = true;
-        } else if (error && error.message.includes('column')) {
-          // Legacy schema table columns if roll_no column does not exist
-          const legacyRes = await supabase
+        try {
+          const { error, count } = await supabase
             .from('students')
             .delete({ count: 'exact' })
-            .or(`student_id.eq.${cleanId},roll_number.eq.${cleanId}`);
+            .eq('id', cleanId);
 
-          if (!legacyRes.error && legacyRes.count !== null && legacyRes.count > 0) {
+          if (!error && count !== null && count > 0) {
             supabaseDeleted = true;
+          } else if (error) {
+            const errMsg = error.message || (typeof error === 'string' ? error : '');
+            const isNetErr =
+              errMsg.toLowerCase().includes('failed to fetch') ||
+              errMsg.toLowerCase().includes('fetch failed') ||
+              errMsg.toLowerCase().includes('networkerror') ||
+              errMsg.toLowerCase().includes('enotfound') ||
+              (error as any)?.name === 'TypeError';
+
+            if (isNetErr) {
+              isOfflineOrNetworkError = true;
+              console.warn('Supabase delete network notice (using local fallback):', errMsg);
+            } else {
+              console.warn('Supabase delete by id notice:', errMsg);
+            }
+          }
+        } catch (delErr: any) {
+          const errMsg = delErr?.message || (typeof delErr === 'string' ? delErr : '');
+          const isNetErr =
+            errMsg.toLowerCase().includes('failed to fetch') ||
+            errMsg.toLowerCase().includes('fetch failed') ||
+            errMsg.toLowerCase().includes('networkerror') ||
+            errMsg.toLowerCase().includes('enotfound') ||
+            delErr?.name === 'TypeError';
+
+          if (isNetErr) {
+            isOfflineOrNetworkError = true;
+            console.warn('Supabase delete network notice (using local fallback):', errMsg);
+          } else {
+            console.warn('Supabase delete by id exception:', delErr);
           }
         }
       }
 
-      if (!supabaseDeleted) {
+      // Fallback: If not UUID and network is fine, try deleting by standard roll_no column
+      if (!supabaseDeleted && !isOfflineOrNetworkError) {
+        try {
+          const { error, count } = await supabase
+            .from('students')
+            .delete({ count: 'exact' })
+            .eq('roll_no', cleanId);
+
+          if (!error && count !== null && count > 0) {
+            supabaseDeleted = true;
+          } else if (error) {
+            const errMsg = error.message || '';
+            const isNetErr =
+              errMsg.toLowerCase().includes('failed to fetch') ||
+              errMsg.toLowerCase().includes('fetch failed') ||
+              (error as any)?.name === 'TypeError';
+
+            if (isNetErr) {
+              isOfflineOrNetworkError = true;
+              console.warn('Supabase delete network notice (using local fallback):', errMsg);
+            } else if (errMsg.includes('column')) {
+              // Legacy schema table columns if roll_no column does not exist
+              const legacyRes = await supabase
+                .from('students')
+                .delete({ count: 'exact' })
+                .or(`student_id.eq.${cleanId},roll_number.eq.${cleanId}`);
+
+              if (!legacyRes.error && legacyRes.count !== null && legacyRes.count > 0) {
+                supabaseDeleted = true;
+              }
+            }
+          }
+        } catch (rollErr: any) {
+          const errMsg = rollErr?.message || '';
+          if (errMsg.toLowerCase().includes('failed to fetch') || rollErr?.name === 'TypeError') {
+            isOfflineOrNetworkError = true;
+            console.warn('Supabase delete network notice (using local fallback):', errMsg);
+          }
+        }
+      }
+
+      if (!supabaseDeleted && !isOfflineOrNetworkError) {
         console.warn(`Supabase delete attempted for '${cleanId}' but no matching records were removed in Supabase database.`);
       }
     } catch (e: any) {
-      console.error('Supabase delete exception:', e);
+      const errMsg = e?.message || (typeof e === 'string' ? e : '');
+      const isNetErr =
+        errMsg.toLowerCase().includes('failed to fetch') ||
+        errMsg.toLowerCase().includes('fetch failed') ||
+        e?.name === 'TypeError';
+
+      if (!isNetErr) {
+        console.warn('Supabase delete exception:', errMsg);
+      } else {
+        console.warn('Supabase delete network exception (using local fallback):', errMsg);
+      }
     }
   }
 

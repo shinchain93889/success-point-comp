@@ -18,6 +18,7 @@ import {
   Calendar,
   Loader2,
   Printer,
+  Phone,
 } from 'lucide-react';
 import { fetchStudentByRollNo } from '@/lib/supabase/student-service';
 import { StudentRecord } from '@/lib/types/portal';
@@ -224,6 +225,24 @@ function VerificationContent() {
                     </p>
                     <p className="text-base font-bold text-white">{student.father_name}</p>
                   </div>
+
+                  {student.mother_name && (
+                    <div className="space-y-1">
+                      <p className="text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-amber-400" /> Mother's Name
+                      </p>
+                      <p className="text-base font-bold text-white">{student.mother_name}</p>
+                    </div>
+                  )}
+
+                  {(student.mobile_no || student.phone) && (
+                    <div className="space-y-1">
+                      <p className="text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-amber-400" /> Mobile Number
+                      </p>
+                      <p className="text-base font-bold font-mono text-white">{student.mobile_no || student.phone}</p>
+                    </div>
+                  )}
 
                   <div className="space-y-1">
                     <p className="text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">

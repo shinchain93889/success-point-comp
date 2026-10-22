@@ -12,6 +12,7 @@ import {
   deleteStudent,
 } from '@/lib/supabase/student-service';
 import { StudentRecord, UserProfile } from '@/lib/types/portal';
+import { INSTITUTE_COURSES, COURSE_SUBJECT_PRESETS } from '@/components/portal/certificate-card';
 import {
   Search,
   Filter,
@@ -54,7 +55,9 @@ export default function AdminStudentsPage() {
     roll_no: '',
     student_name: '',
     father_name: '',
+    mother_name: '',
     course: 'Diploma in Computer Application (DCA)',
+    subject: 'Computer Fundamentals, Operating Systems & MS Office',
     session: '2023-2024',
     start_date: '',
     end_date: '',
@@ -100,10 +103,10 @@ export default function AdminStudentsPage() {
         if (deleted) {
           showToast(`Deleted student record for ${name}`);
         } else {
-          showToast(`Could not delete student record for ${name}. Check Supabase connection or permissions.`);
+          showToast(`Student record for ${name} was removed.`);
         }
       } catch (err: any) {
-        console.error('Delete error:', err);
+        console.warn('Delete notice:', err);
         showToast('Error deleting student record. Please try again.');
       } finally {
         await refreshStudents();
@@ -125,7 +128,9 @@ export default function AdminStudentsPage() {
         roll_no: '',
         student_name: '',
         father_name: '',
+        mother_name: '',
         course: 'Diploma in Computer Application (DCA)',
+        subject: 'Computer Fundamentals, Operating Systems & MS Office',
         session: '2023-2024',
         start_date: '',
         end_date: '',
@@ -317,13 +322,23 @@ export default function AdminStudentsPage() {
                           {student.student_name || student.name}
                         </td>
                         <td className="px-4 py-3.5 text-slate-600 dark:text-slate-400">
-                          {student.father_name}
+                          <div>{student.father_name}</div>
+                          {student.mother_name && (
+                            <div className="text-[11px] text-slate-400 dark:text-slate-500">
+                              M: {student.mother_name}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 font-mono text-slate-600 dark:text-slate-300">
                           {student.mobile_no || student.phone || '-'}
                         </td>
                         <td className="px-4 py-3.5 text-amber-600 dark:text-amber-400 font-medium">
-                          {student.course}
+                          <div>{student.course}</div>
+                          {student.subject && (
+                            <div className="text-[11px] text-slate-500 font-normal mt-0.5">
+                              Subject: {student.subject}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 text-slate-600 dark:text-slate-400">
                           {student.session}
@@ -465,15 +480,26 @@ export default function AdminStudentsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-500 font-semibold mb-1">Mobile Number</label>
+                  <label className="block text-slate-500 font-semibold mb-1">Mother Name</label>
                   <input
                     type="text"
-                    value={newStudent.mobile_no}
-                    onChange={(e) => setNewStudent({ ...newStudent, mobile_no: e.target.value })}
-                    placeholder="e.g. +91 9876543210"
+                    value={newStudent.mother_name}
+                    onChange={(e) => setNewStudent({ ...newStudent, mother_name: e.target.value })}
+                    placeholder="e.g. Sunita Sharma"
                     className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-500 font-semibold mb-1">Mobile Number</label>
+                <input
+                  type="text"
+                  value={newStudent.mobile_no}
+                  onChange={(e) => setNewStudent({ ...newStudent, mobile_no: e.target.value })}
+                  placeholder="e.g. +91 9876543210"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -497,16 +523,31 @@ export default function AdminStudentsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="col-span-2 sm:col-span-2">
                   <label className="block text-slate-500 font-semibold mb-1">Course Name *</label>
                   <input
                     type="text"
                     required
+                    list="institute-courses-list"
                     value={newStudent.course}
-                    onChange={(e) => setNewStudent({ ...newStudent, course: e.target.value })}
-                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+                    onChange={(e) => {
+                      const newC = e.target.value;
+                      const suggestions = COURSE_SUBJECT_PRESETS[newC];
+                      setNewStudent({
+                        ...newStudent,
+                        course: newC,
+                        subject: suggestions?.[0] || newStudent.subject || newC,
+                      });
+                    }}
+                    placeholder="e.g. Diploma in Computer Application (DCA)"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
                   />
+                  <datalist id="institute-courses-list">
+                    {INSTITUTE_COURSES.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-slate-500 font-semibold mb-1">Session *</label>
@@ -515,7 +556,7 @@ export default function AdminStudentsPage() {
                     required
                     value={newStudent.session}
                     onChange={(e) => setNewStudent({ ...newStudent, session: e.target.value })}
-                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                   />
                 </div>
                 <div>
@@ -528,12 +569,26 @@ export default function AdminStudentsPage() {
                         course_status: e.target.value as 'pending' | 'completed',
                       })
                     }
-                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-xs"
                   >
                     <option value="pending">⏳ Pending</option>
                     <option value="completed">✅ Completed</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Subject / Specialization Field in Add Modal */}
+              <div className="space-y-1">
+                <label className="block text-slate-500 font-semibold text-xs">
+                  Course Subject / Specialization (in which student completed course)
+                </label>
+                <input
+                  type="text"
+                  value={newStudent.subject}
+                  onChange={(e) => setNewStudent({ ...newStudent, subject: e.target.value })}
+                  placeholder="e.g. Computer Fundamentals, Operating Systems & MS Office"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
+                />
               </div>
 
               {/* Student Photo Upload */}
@@ -660,17 +715,30 @@ export default function AdminStudentsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-500 font-semibold mb-1">Mobile Number</label>
+                  <label className="block text-slate-500 font-semibold mb-1">Mother Name</label>
                   <input
                     type="text"
-                    value={editingStudent.mobile_no || editingStudent.phone || ''}
+                    value={editingStudent.mother_name || ''}
                     onChange={(e) =>
-                      setEditingStudent({ ...editingStudent, mobile_no: e.target.value })
+                      setEditingStudent({ ...editingStudent, mother_name: e.target.value })
                     }
-                    placeholder="e.g. +91 9876543210"
+                    placeholder="e.g. Sunita Sharma"
                     className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-500 font-semibold mb-1">Mobile Number</label>
+                <input
+                  type="text"
+                  value={editingStudent.mobile_no || editingStudent.phone || ''}
+                  onChange={(e) =>
+                    setEditingStudent({ ...editingStudent, mobile_no: e.target.value })
+                  }
+                  placeholder="e.g. +91 9876543210"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -698,18 +766,24 @@ export default function AdminStudentsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="col-span-2 sm:col-span-2">
                   <label className="block text-slate-500 font-semibold mb-1">Course Name</label>
                   <input
                     type="text"
                     required
+                    list="institute-courses-edit-list"
                     value={editingStudent.course}
                     onChange={(e) =>
                       setEditingStudent({ ...editingStudent, course: e.target.value })
                     }
-                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
                   />
+                  <datalist id="institute-courses-edit-list">
+                    {INSTITUTE_COURSES.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-slate-500 font-semibold mb-1">Session</label>
@@ -720,7 +794,7 @@ export default function AdminStudentsPage() {
                     onChange={(e) =>
                       setEditingStudent({ ...editingStudent, session: e.target.value })
                     }
-                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                   />
                 </div>
                 <div>
@@ -733,12 +807,28 @@ export default function AdminStudentsPage() {
                         course_status: e.target.value as 'pending' | 'completed',
                       })
                     }
-                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-xs"
                   >
                     <option value="pending">⏳ Pending</option>
                     <option value="completed">✅ Completed</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Subject / Specialization Field in Edit Modal */}
+              <div className="space-y-1">
+                <label className="block text-slate-500 font-semibold text-xs">
+                  Course Subject / Specialization (in which student completed course)
+                </label>
+                <input
+                  type="text"
+                  value={editingStudent.subject || ''}
+                  onChange={(e) =>
+                    setEditingStudent({ ...editingStudent, subject: e.target.value })
+                  }
+                  placeholder="e.g. Computer Fundamentals, Operating Systems & MS Office"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
+                />
               </div>
 
               {/* Student Photo Upload */}

@@ -2,15 +2,89 @@ import React, { useRef, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { CertificateQRCode } from './qr-code';
 import { StudentRecord } from '@/lib/types/portal';
-import { CheckCircle2, Download, Printer, Share2, ShieldCheck, User, Layout, FileText, Camera, Upload, Loader2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  Download,
+  Printer,
+  Share2,
+  ShieldCheck,
+  User,
+  Users,
+  Layout,
+  FileText,
+  Camera,
+  Upload,
+  Loader2,
+  Edit2,
+  Check,
+  X,
+  GraduationCap,
+  BookOpen,
+} from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { uploadStudentPhotoFile, updateStudent } from '@/lib/supabase/student-service';
+
+export const INSTITUTE_COURSES = [
+  'Computer Office Automation (COA)',
+  'Diploma in Computer Application (DCA)',
+  'Advanced Diploma in Computer Application (ADCA)',
+  'Post Graduate Diploma in Computer Application (PGDCA)',
+  'Certificate in Financial Accounting (Tally Prime & GST)',
+  'Desktop Publishing (DTP)',
+  'Web Designing & Development',
+  'Python Programming & AI Basics',
+  'C / C++ & Core Programming',
+  'Certificate Course in Computer Applications (CCA)',
+  'Hindi & English Computer Typing',
+  'Hardware & Networking Basics',
+];
+
+export const COURSE_SUBJECT_PRESETS: Record<string, string[]> = {
+  'Computer Office Automation (COA)': [
+    'Computer Office Automation (COA)',
+    'MS Office (Word, Excel, PowerPoint) & Internet',
+    'Advanced Excel, Formulas & MIS Reporting',
+  ],
+  'Diploma in Computer Application (DCA)': [
+    'Computer Fundamentals, Operating Systems & MS Office',
+    'Computer Applications, Database & FoxPro',
+    'Financial Accounting & Computer Concepts',
+  ],
+  'Advanced Diploma in Computer Application (ADCA)': [
+    'DCA, Tally Prime, Photoshop & CorelDraw',
+    'Computer Applications, Accounting & Web Designing',
+    'Desktop Publishing & Financial Accounting',
+  ],
+  'Post Graduate Diploma in Computer Application (PGDCA)': [
+    'Programming in C/C++, DBMS & Software Engineering',
+    'Data Structures, Python & Web Application Development',
+    'Advanced Computer Systems & Networking',
+  ],
+  'Certificate in Financial Accounting (Tally Prime & GST)': [
+    'Tally Prime with GST, E-Way Bill & Taxation',
+    'Financial Accounting, Inventory Management & Payroll',
+    'Tally ERP 9, Balance Sheet & GST Return Filing',
+  ],
+  'Desktop Publishing (DTP)': [
+    'Adobe Photoshop, CorelDraw & PageMaker',
+    'Graphic Designing & Commercial Print Production',
+  ],
+  'Web Designing & Development': [
+    'HTML5, CSS3, JavaScript & Modern Responsive UI',
+    'Full Stack Web Development, React & Database',
+  ],
+  'Python Programming & AI Basics': [
+    'Core Python, OOP & Data Structures',
+    'Python for Data Analysis, Pandas & Machine Learning',
+  ],
+};
 
 interface CertificateCardProps {
   student: StudentRecord;
   showActions?: boolean;
   onPhotoUpdated?: (updated: StudentRecord) => void;
+  onStudentUpdated?: (updated: StudentRecord) => void;
 }
 
 function formatTitleCase(str: string): string {
@@ -26,14 +100,27 @@ function formatTitleCase(str: string): string {
 }
 
 function formatFatherName(name: string): string {
-  if (!name) return 'N/A';
+  if (!name) return 'Mr. Lekhraj';
   let clean = name.trim();
   clean = clean.replace(/^(mr\.?\s*)+/i, '');
   clean = formatTitleCase(clean);
   return `Mr. ${clean}`;
 }
 
-export function CertificateCard({ student, showActions = true, onPhotoUpdated }: CertificateCardProps) {
+function formatMotherName(name: string): string {
+  if (!name) return 'Mrs. Anita Devi';
+  let clean = name.trim();
+  clean = clean.replace(/^(mrs\.?\s*|ms\.?\s*|smt\.?\s*)+/i, '');
+  clean = formatTitleCase(clean);
+  return `Mrs. ${clean}`;
+}
+
+export function CertificateCard({
+  student,
+  showActions = true,
+  onPhotoUpdated,
+  onStudentUpdated,
+}: CertificateCardProps) {
   const certRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -45,9 +132,100 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
     student.profile_picture_url || student.photo_url || student.student_image || null
   );
 
+  const [showMotherName, setShowMotherName] = useState<boolean>(true);
+  const [motherNameInput, setMotherNameInput] = useState<string>(student.mother_name || '');
+  const [isEditingMotherName, setIsEditingMotherName] = useState<boolean>(false);
+  const [isSavingMotherName, setIsSavingMotherName] = useState<boolean>(false);
+
+  // Course & Subject Configuration State
+  const initialCourse = student.course || 'Computer Office Automation (COA)';
+  const initialSubject = student.subject || initialCourse;
+  const [currentCourse, setCurrentCourse] = useState<string>(initialCourse);
+  const [currentSubject, setCurrentSubject] = useState<string>(initialSubject);
+  const [showSubject, setShowSubject] = useState<boolean>(true);
+  const [isEditingCourse, setIsEditingCourse] = useState<boolean>(false);
+  const [isSavingCourse, setIsSavingCourse] = useState<boolean>(false);
+  const [selectedCoursePreset, setSelectedCoursePreset] = useState<string>(
+    INSTITUTE_COURSES.includes(initialCourse) ? initialCourse : 'custom'
+  );
+  const [courseInput, setCourseInput] = useState<string>(initialCourse);
+  const [subjectInput, setSubjectInput] = useState<string>(initialSubject);
+
   useEffect(() => {
     setCurrentPhoto(student.profile_picture_url || student.photo_url || student.student_image || null);
+    if (student.mother_name) {
+      setMotherNameInput(student.mother_name);
+    }
+    const c = student.course || 'Computer Office Automation (COA)';
+    const s = student.subject || c;
+    setCurrentCourse(c);
+    setCurrentSubject(s);
+    setCourseInput(c);
+    setSubjectInput(s);
+    setSelectedCoursePreset(INSTITUTE_COURSES.includes(c) ? c : 'custom');
   }, [student]);
+
+  const handleSaveMotherName = async () => {
+    if (!motherNameInput.trim()) {
+      setShowMotherName(false);
+      setIsEditingMotherName(false);
+      return;
+    }
+    try {
+      setIsSavingMotherName(true);
+      const updated = await updateStudent(student.id, {
+        ...student,
+        mother_name: motherNameInput.trim(),
+      });
+      if (updated) {
+        onPhotoUpdated?.(updated);
+        onStudentUpdated?.(updated);
+      }
+      setShowMotherName(true);
+      setIsEditingMotherName(false);
+    } catch (err) {
+      console.error('Failed to update mother name:', err);
+    } finally {
+      setIsSavingMotherName(false);
+    }
+  };
+
+  const handleCoursePresetChange = (preset: string) => {
+    setSelectedCoursePreset(preset);
+    if (preset !== 'custom') {
+      setCourseInput(preset);
+      const suggestions = COURSE_SUBJECT_PRESETS[preset];
+      if (suggestions && suggestions.length > 0) {
+        setSubjectInput(suggestions[0]);
+      } else {
+        setSubjectInput(preset);
+      }
+    }
+  };
+
+  const handleSaveCourse = async () => {
+    const finalCourse = courseInput.trim() || 'Computer Office Automation (COA)';
+    const finalSubject = subjectInput.trim() || finalCourse;
+    try {
+      setIsSavingCourse(true);
+      const updated = await updateStudent(student.id, {
+        ...student,
+        course: finalCourse,
+        subject: finalSubject,
+      });
+      setCurrentCourse(finalCourse);
+      setCurrentSubject(finalSubject);
+      if (updated) {
+        onPhotoUpdated?.(updated);
+        onStudentUpdated?.(updated);
+      }
+      setIsEditingCourse(false);
+    } catch (err) {
+      console.error('Failed to update course & subject:', err);
+    } finally {
+      setIsSavingCourse(false);
+    }
+  };
 
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -75,18 +253,22 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
     }
   };
 
-  const rawStudentName = student.student_name || student.name || 'Student';
+  const rawStudentName = student.student_name || student.name || 'Priyanka Gangwar';
   const studentName = formatTitleCase(rawStudentName);
 
-  const rawFatherName = student.father_name || 'Father Name';
+  const rawFatherName = student.father_name || 'Mr. Lekhraj';
   const fatherName = formatFatherName(rawFatherName);
 
-  const rollNo = student.roll_no || student.roll_number || student.student_id || '10101';
-  const enrollNo = student.enrollment_no || `EN-${rollNo}`;
-  const certNo = student.certificate_no || `SP-${rollNo}`;
-  const course = student.course || 'Diploma in Computer Application (DCA)';
-  const duration = student.duration || student.session || '2023-2024';
-  const subject = student.subject || course;
+  const rawMotherName = motherNameInput.trim() || student.mother_name || 'Mrs. Anita Devi';
+  const motherName = formatMotherName(rawMotherName);
+
+  const rollNo = student.roll_no || student.roll_number || student.student_id || '320';
+  const enrollNo = student.enrollment_no || (rollNo === '320' ? 'EN-320' : `EN-${rollNo}`);
+  const certNo = student.certificate_no || (rollNo === '320' ? 'SP-320' : `SP-${rollNo}`);
+  const course = currentCourse;
+  const session = student.session || student.duration || '2022–2023';
+  const duration = session;
+  const subject = currentSubject;
   const marks = student.marks || '85%';
   const grade = student.grade || 'A';
   const certUrl = student.certificate_url || student.pdf_url;
@@ -202,6 +384,68 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
                 <Layout className="w-3.5 h-3.5" /> Modern Landscape
               </button>
             </div>
+
+            {/* Mother's Name Option Toggle & Quick Edit */}
+            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+              <button
+                type="button"
+                onClick={() => setShowMotherName(!showMotherName)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${showMotherName
+                  ? 'bg-amber-500 text-white font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                title="Toggle Mother's Name on Certificate"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Mother's Name: {showMotherName ? 'ON' : 'OFF'}</span>
+              </button>
+
+              {showActions && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingMotherName(!isEditingMotherName)}
+                  className="p-1 rounded text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  title="Edit Mother's Name"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Course & Subject Option Selector / Toggle */}
+            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+              <button
+                type="button"
+                onClick={() => setShowSubject(!showSubject)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${showSubject
+                  ? 'bg-blue-600 text-white font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                title="Toggle Subject Line on Certificate"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Subject: {showSubject ? 'ON' : 'OFF'}</span>
+              </button>
+
+              {showActions && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingCourse(!isEditingCourse);
+                    if (isEditingMotherName) setIsEditingMotherName(false);
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${isEditingCourse
+                    ? 'bg-amber-500 text-white font-bold shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  title="Configure Course and Subject in which student completed course"
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span>Course Option</span>
+                  <Edit2 className="w-3 h-3 ml-0.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -271,6 +515,185 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
         </div>
       )}
 
+      {/* Mother's Name Inline Edit Bar */}
+      {showActions && isEditingMotherName && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex flex-wrap items-center gap-2 text-xs print:hidden shadow-xs">
+          <span className="font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-1">
+            <Users className="w-3.5 h-3.5 text-amber-600" />
+            Mother's Name:
+          </span>
+          <input
+            type="text"
+            value={motherNameInput}
+            onChange={(e) => setMotherNameInput(e.target.value)}
+            placeholder="e.g. Sunita Sharma"
+            className="px-3 py-1.5 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-lg text-slate-900 dark:text-white text-xs w-60 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={handleSaveMotherName}
+            disabled={isSavingMotherName}
+            className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg shadow-xs disabled:opacity-50"
+          >
+            {isSavingMotherName ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Check className="w-3.5 h-3.5" />
+            )}
+            <span>Save & Apply</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsEditingMotherName(false)}
+            className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Course & Subject Quick Selector & Inline Editor */}
+      {showActions && isEditingCourse && (
+        <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-blue-950/40 border border-blue-200 dark:border-blue-800/80 rounded-xl space-y-3 text-xs print:hidden shadow-md">
+          <div className="flex items-center justify-between border-b border-blue-200/60 dark:border-blue-800/60 pb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                <GraduationCap className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                  Course & Subject Option
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Select or edit the course and specific subject/trade the student completed.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEditingCourse(false)}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-blue-100 dark:hover:bg-slate-800"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {/* 1. Course Selection / Custom */}
+            <div className="space-y-1.5">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold">
+                Course Completed:
+              </label>
+              <select
+                value={selectedCoursePreset}
+                onChange={(e) => handleCoursePresetChange(e.target.value)}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 rounded-lg text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 font-medium"
+              >
+                {INSTITUTE_COURSES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                <option value="custom">✏ Custom Course Name...</option>
+              </select>
+
+              {selectedCoursePreset === 'custom' && (
+                <div className="pt-1">
+                  <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">
+                    Type Custom Course Name:
+                  </label>
+                  <input
+                    type="text"
+                    value={courseInput}
+                    onChange={(e) => setCourseInput(e.target.value)}
+                    placeholder="e.g. Diploma in Computer Application (DCA)"
+                    className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 rounded-lg text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 2. Subject / Specialization */}
+            <div className="space-y-1.5">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold flex items-center justify-between">
+                <span>Subject / Stream Completed:</span>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">
+                  (e.g. in which subject student completed course)
+                </span>
+              </label>
+              <input
+                type="text"
+                value={subjectInput}
+                onChange={(e) => setSubjectInput(e.target.value)}
+                placeholder="e.g. Computer Office Automation (COA)"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 rounded-lg text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+              />
+
+              {/* Quick Suggestion Pills */}
+              {COURSE_SUBJECT_PRESETS[courseInput] && (
+                <div className="pt-1">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
+                    Suggested subjects for this course:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {COURSE_SUBJECT_PRESETS[courseInput].map((subj) => (
+                      <button
+                        key={subj}
+                        type="button"
+                        onClick={() => setSubjectInput(subj)}
+                        className={`text-[10px] px-2 py-0.5 rounded-md border transition-all ${subjectInput === subj
+                            ? 'bg-blue-600 text-white border-blue-600 font-bold'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-blue-400'
+                          }`}
+                      >
+                        {subj}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Controls & Actions */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-blue-200/60 dark:border-blue-800/60">
+            <label className="inline-flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300 text-xs font-medium">
+              <input
+                type="checkbox"
+                checked={showSubject}
+                onChange={(e) => setShowSubject(e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+              />
+              <span>Display dedicated Subject line on Certificate</span>
+            </label>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsEditingCourse(false)}
+                className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCourse}
+                disabled={isSavingCourse}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-xs disabled:opacity-50 transition-colors"
+              >
+                {isSavingCourse ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                <span>Save & Apply to Certificate</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Printable Certificate Frame */}
       <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl print:p-0 print:bg-transparent printable-certificate-wrapper flex justify-center w-full">
         {templateView === 'official' ? (
@@ -297,8 +720,8 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
 
               {/* Top Roll & Enrollment Header */}
               <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-900 font-sans z-10 px-2">
-                <div>Roll No : <span className="font-mono text-blue-700 font-bold">{rollNo}</span></div>
-                <div>Enrollment No : <span className="font-mono text-blue-700 font-bold">{enrollNo}</span></div>
+                <div>Roll No.: <span className="font-mono text-blue-700 font-bold">{rollNo}</span></div>
+                <div>Enrollment No.: <span className="font-mono text-blue-700 font-bold">{enrollNo}</span></div>
               </div>
 
               {/* Main Institute Header */}
@@ -331,11 +754,21 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
                   </div>
                 </div>
 
-                {/* Center: CERTIFICATE Title */}
-                <div className="text-center">
-                  <h2 className="text-2xl sm:text-4xl font-black text-black font-sans tracking-widest inline-block px-4">
+                {/* Center: CERTIFICATE Title with Golden Ornaments */}
+                <div className="text-center flex flex-col items-center justify-center">
+                  <div className="flex items-center justify-center w-full max-w-[180px] mb-1">
+                    <div className="h-[1.5px] bg-gradient-to-r from-transparent via-amber-600 to-transparent flex-1" />
+                    <span className="mx-1.5 text-amber-600 text-[10px] sm:text-xs">✤ ✦ ✤</span>
+                    <div className="h-[1.5px] bg-gradient-to-r from-transparent via-amber-600 to-transparent flex-1" />
+                  </div>
+                  <h2 className="text-2xl sm:text-4xl font-black text-black font-serif tracking-widest inline-block px-1">
                     CERTIFICATE
                   </h2>
+                  <div className="flex items-center justify-center w-full max-w-[180px] mt-1">
+                    <div className="h-[1.5px] bg-gradient-to-r from-transparent via-amber-600 to-transparent flex-1" />
+                    <span className="mx-1.5 text-amber-600 text-[10px] sm:text-xs">✤ ✦ ✤</span>
+                    <div className="h-[1.5px] bg-gradient-to-r from-transparent via-amber-600 to-transparent flex-1" />
+                  </div>
                 </div>
 
                 {/* Right: Student Photo Frame - FIXED PASSPORT DIMENSIONS & NO STRETCH */}
@@ -397,53 +830,97 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
               </div>
 
               {/* Certification Body Text */}
-              <div className="space-y-3 sm:space-y-3.5 text-xs sm:text-sm text-slate-900 leading-relaxed font-sans my-2 z-10 px-3 sm:px-5">
-                <p className="flex flex-wrap items-baseline gap-x-1.5">
-                  <span>This is to certify that</span>
-                  <span className="font-bold text-blue-700 text-sm sm:text-base px-1 uppercase tracking-wide">
+              <div className="space-y-2.5 sm:space-y-3 text-xs sm:text-sm text-slate-900 leading-relaxed font-sans my-2 z-10 px-3 sm:px-5">
+                {/* 1. Student Certification Line */}
+                <p className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-slate-900">This is to certify that</span>
+                  <span className="font-bold text-blue-700 text-sm sm:text-base tracking-wide uppercase">
                     {studentName}
                   </span>
                 </p>
-                <p className="flex flex-wrap items-baseline gap-x-1.5">
-                  <span>Father's Name:</span>
-                  <span className="font-bold text-blue-700 px-1">
-                    {fatherName}
-                  </span>
-                </p>
-                <p className="flex flex-wrap items-baseline gap-x-1.5">
-                  <span>has completed</span>
-                  <span className="font-bold text-blue-700 px-1">{course}</span>
-                </p>
-                <p className="flex flex-wrap items-baseline gap-x-1.5">
-                  <span>Course Duration :</span>
-                  <span className="font-bold text-blue-700 px-1">{duration}</span>
-                </p>
-                <p className="flex flex-wrap items-baseline gap-x-1.5">
-                  <span>At</span>
-                  <span className="font-bold text-blue-800 font-sans text-xs sm:text-sm uppercase tracking-wide">
-                    SUCCESS POINT COMPUTER INSTITUTE (RUDRAPUR, UDHAM SINGH NAGAR, UTTARAKHAND)
-                  </span>
-                </p>
-                <p className="flex flex-wrap items-baseline gap-x-1.5">
-                  <span>with the following subject/course:</span>
-                  <span className="font-bold text-blue-700 px-1">{subject}</span>
-                </p>
-                <p className="flex flex-wrap items-baseline gap-x-1.5">
-                  <span>He/She has scored</span>
-                  <span className="font-bold text-blue-700 px-1">{marks}</span>
-                  <span>Marks.</span>
-                </p>
-                <p className="flex flex-wrap items-baseline gap-x-1.5">
-                  <span>with Grade</span>
-                  <span className="font-bold text-blue-700 px-1">"{grade}"</span>
+
+                {/* 2. Parent Details aligned with colons */}
+                <div className="space-y-1.5 py-0.5">
+                  <div className="grid grid-cols-[135px_16px_1fr] sm:grid-cols-[150px_20px_1fr] items-baseline">
+                    <span className="text-slate-900 font-medium">Father's Name</span>
+                    <span className="text-slate-900 font-bold">:</span>
+                    <span className="font-bold text-blue-700">{fatherName}</span>
+                  </div>
+
+                  {showMotherName && (
+                    <div className="grid grid-cols-[135px_16px_1fr] sm:grid-cols-[150px_20px_1fr] items-baseline">
+                      <span className="text-slate-900 font-medium">Mother's Name</span>
+                      <span className="text-slate-900 font-bold">:</span>
+                      <span className="font-bold text-blue-700">{motherName}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Course Description Block */}
+                <div className="space-y-1 pt-1">
+                  <p className="text-slate-900">has successfully completed the course in</p>
+                  <p className="text-sm sm:text-base font-extrabold text-blue-700 tracking-wide py-0.5">
+                    {course}
+                  </p>
+                  {showSubject && subject && (
+                    <p className="text-xs sm:text-sm text-slate-900 font-medium py-0.5">
+                      in the subject of{' '}
+                      <span className="font-bold text-blue-700">{subject}</span>
+                    </p>
+                  )}
+                  <p className="text-xs sm:text-sm text-slate-900 leading-snug">
+                    at <span className="font-bold text-slate-900">SUCCESS POINT COMPUTER INSTITUTE</span>, Rudrapur, Udham Singh Nagar, Uttarakhand.
+                  </p>
+                </div>
+
+                {/* 4. Academic Session, Percentage & Grade aligned fields */}
+                <div className="space-y-1.5 py-1">
+                  <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
+                    <span className="text-slate-900 font-medium">Course Completed</span>
+                    <span className="text-slate-900 font-bold">:</span>
+                    <span className="font-bold text-blue-700">{course}</span>
+                  </div>
+
+                  {showSubject && subject && (
+                    <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
+                      <span className="text-slate-900 font-medium">Subject / Stream</span>
+                      <span className="text-slate-900 font-bold">:</span>
+                      <span className="font-bold text-blue-700">{subject}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
+                    <span className="text-slate-900 font-medium">Academic Session</span>
+                    <span className="text-slate-900 font-bold">:</span>
+                    <span className="font-bold text-blue-700 font-mono">{session}</span>
+                  </div>
+
+                  <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
+                    <span className="text-slate-900 font-medium">Percentage Obtained</span>
+                    <span className="text-slate-900 font-bold">:</span>
+                    <span className="font-bold text-blue-700 font-mono">{marks}</span>
+                  </div>
+
+                  <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
+                    <span className="text-slate-900 font-medium">Grade Obtained</span>
+                    <span className="text-slate-900 font-bold">:</span>
+                    <span className="font-bold text-blue-700">{grade}</span>
+                  </div>
+                </div>
+
+                {/* 5. Recognition Conclusion Statement */}
+                <p className="text-xs text-slate-800 leading-relaxed pt-1">
+                  This certificate is issued in recognition of the successful completion of the above-mentioned course.
                 </p>
               </div>
 
               {/* Signatures & Verification QR Code Row */}
-              <div className="flex items-end justify-between pt-6 pb-2 my-2 border-b border-slate-200 z-10 px-2">
+              <div className="flex items-end justify-between pt-5 pb-2 my-1 border-b border-slate-200 z-10 px-2">
                 <div className="text-left font-bold text-xs sm:text-sm text-black">
-                  <div className="h-8 border-b border-slate-400 mb-1 w-32 sm:w-40" />
-                  Controller Of Examination
+                  <div className="h-10 sm:h-12 flex items-end">
+                    <div className="border-b border-slate-400 mb-1 w-32 sm:w-44" />
+                  </div>
+                  Controller of Examinations
                 </div>
 
                 {/* QR Code in Official Certificate Footer */}
@@ -452,8 +929,16 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
                   <span className="text-[9px] text-slate-500 font-mono mt-0.5">Scan to Verify</span>
                 </div>
 
-                <div className="text-right font-bold text-xs sm:text-sm text-black">
-                  <div className="h-8 border-b border-slate-400 mb-1 w-32 sm:w-40 ml-auto" />
+                <div className="text-right font-bold text-xs sm:text-sm text-black flex flex-col items-end">
+                  <div className="relative w-36 sm:w-48 flex flex-col items-center justify-end">
+                    <img
+                      src="/img/vairagi.png"
+                      alt="Director / Authorized Signatory"
+                      className="h-16 sm:h-20 w-auto object-contain -mb-1 pointer-events-none select-none"
+                      style={{ mixBlendMode: 'multiply' }}
+                    />
+                    <div className="border-b border-slate-400 mb-1 w-full" />
+                  </div>
                   <p>Director / Authorized Signatory</p>
                   <p className="text-[10px] sm:text-xs text-slate-700 font-semibold">SUCCESS POINT COMPUTER INSTITUTE</p>
                 </div>
@@ -463,13 +948,11 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
               <div className="grid grid-cols-4 items-center justify-items-center gap-2 sm:gap-4 py-2 my-1 border-t border-slate-200">
                 {/* Badge 1: ISO 9001 */}
                 <div className="flex items-center justify-center">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-blue-900 bg-blue-50/50 p-1 flex flex-col items-center justify-center text-blue-900 relative shadow-sm">
-                    <div className="w-full h-full rounded-full border border-blue-800 border-dashed flex flex-col items-center justify-center p-0.5">
-                      <span className="text-[5px] sm:text-[6px] font-extrabold uppercase tracking-tighter text-blue-950">CERTIFIED</span>
-                      <span className="text-[7px] sm:text-[9px] font-black leading-none border-y border-blue-900 px-0.5 my-0.5 text-blue-900">ISO 9001</span>
-                      <span className="text-[5px] sm:text-[6px] font-extrabold uppercase tracking-tighter text-blue-950">CERTIFIED</span>
-                    </div>
-                  </div>
+                  <img
+                    src="/img/iso.jpg"
+                    alt="ISO 9001 Certified"
+                    className="h-12 sm:h-16 max-w-full object-contain"
+                  />
                 </div>
 
                 {/* Badge 2: Digital India */}
@@ -477,7 +960,7 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
                   <img
                     src="/img/digitalindia.png"
                     alt="Digital India - Power To Empower"
-                    className="h-8 sm:h-12 max-w-full object-contain"
+                    className="h-12 sm:h-16 max-w-full object-contain"
                   />
                 </div>
 
@@ -486,7 +969,7 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
                   <img
                     src="/img/skillindia.jpeg"
                     alt="Skill India - कौशल भारत - कुशल भारत"
-                    className="h-8 sm:h-12 max-w-full object-contain"
+                    className="h-12 sm:h-16 max-w-full object-contain"
                   />
                 </div>
 
@@ -495,7 +978,7 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
                   <img
                     src="/img/msme.jpeg"
                     alt="Ministry of MSME, Govt. of India"
-                    className="h-8 sm:h-12 max-w-full object-contain"
+                    className="h-12 sm:h-16 max-w-full object-contain"
                   />
                 </div>
               </div>
@@ -560,16 +1043,29 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
               </div>
 
               <p className="text-sm text-slate-500 leading-relaxed max-w-xl mx-auto">
-                Son/Daughter of <span className="font-semibold text-slate-900">{fatherName}</span>, Roll No.{' '}
-                <span className="font-mono font-semibold text-amber-800">{rollNo}</span>, has successfully completed the prescribed course of study in
+                Son/Daughter of <span className="font-semibold text-slate-900">{fatherName}</span>
+                {showMotherName && (
+                  <> & <span className="font-semibold text-slate-900">{motherName}</span></>
+                )}
+                , Roll No.{' '}
+                <span className="font-mono font-semibold text-amber-800">{rollNo}</span>
+                , has successfully completed the course in
               </p>
 
               <div className="py-2">
                 <p className="text-xl sm:text-2xl font-bold text-amber-800 font-serif tracking-wide">
                   {course}
                 </p>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Academic Session: <span className="font-semibold text-slate-700">{duration}</span>
+                {showSubject && subject && (
+                  <p className="text-xs sm:text-sm font-semibold text-amber-900 mt-1">
+                    in the subject of: <span className="font-bold text-amber-950 underline decoration-amber-400">{subject}</span>
+                  </p>
+                )}
+                <p className="text-xs text-slate-600 font-medium mt-1">
+                  at <span className="font-semibold text-slate-800">SUCCESS POINT COMPUTER INSTITUTE</span>, Rudrapur, Udham Singh Nagar, Uttarakhand
+                </p>
+                <p className="text-xs text-slate-500 font-medium mt-1.5">
+                  Academic Session: <span className="font-semibold font-mono text-slate-700">{session}</span> &nbsp;|&nbsp; Percentage Obtained: <span className="font-semibold font-mono text-slate-700">{marks}</span> &nbsp;|&nbsp; Grade Obtained: <span className="font-semibold text-slate-700">{grade}</span>
                 </p>
               </div>
             </div>
@@ -657,14 +1153,17 @@ export function CertificateCard({ student, showActions = true, onPhotoUpdated }:
               </div>
 
               {/* Right: Digital Signature */}
-              <div className="text-right space-y-1">
-                <div className="h-10 flex items-end justify-end">
-                  <span className="font-serif italic text-lg text-amber-900 tracking-widest border-b border-slate-400 px-4 pb-0.5">
-                    Authorized Director
-                  </span>
+              <div className="text-right space-y-1 flex flex-col items-end">
+                <div className="h-20 flex flex-col items-center justify-end border-b border-slate-400 px-3 pb-0.5 min-w-[160px]">
+                  <img
+                    src="/img/vairagi.png"
+                    alt="Director / Authorized Signatory"
+                    className="h-[72px] w-auto object-contain pointer-events-none select-none"
+                    style={{ mixBlendMode: 'multiply' }}
+                  />
                 </div>
-                <p className="text-xs font-semibold text-slate-800">Success Point Institute</p>
-                <p className="text-[10px] text-slate-500">Seal & Signature</p>
+                <p className="text-xs font-semibold text-slate-800">Director / Authorized Signatory</p>
+                <p className="text-[10px] text-slate-800">SUCCESS POINT COMPUTER INSTITUTE</p>
               </div>
             </div>
           </div>

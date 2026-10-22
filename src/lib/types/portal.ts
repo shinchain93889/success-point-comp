@@ -15,6 +15,7 @@ export interface StudentRecord {
   roll_no: string;
   student_name: string;
   father_name: string;
+  mother_name?: string | null;
   course: string;
   session: string;
   start_date?: string | null;
@@ -58,6 +59,7 @@ export interface BulkUploadRow {
   roll_number: string;
   name: string;
   father_name: string;
+  mother_name?: string;
   course: string;
   session: string;
   start_date?: string;

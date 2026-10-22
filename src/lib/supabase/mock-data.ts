@@ -2,10 +2,36 @@ import { StudentRecord, UserProfile, AuditLog } from '@/lib/types/portal';
 
 export const INITIAL_MOCK_STUDENTS: StudentRecord[] = [
   {
+    id: '32000000-0000-0000-0000-000000000320',
+    roll_no: '320',
+    student_name: 'Priyanka Gangwar',
+    father_name: 'Mr. Lekhraj',
+    mother_name: 'Mrs. Anita Devi',
+    course: 'Computer Office Automation (COA)',
+    session: '2022–2023',
+    start_date: '2022-07-01',
+    end_date: '2023-06-30',
+    mobile_no: '7668687048',
+    course_status: 'completed',
+    certificate_url: null,
+    created_at: new Date('2023-07-15').toISOString(),
+    student_id: '320',
+    name: 'Priyanka Gangwar',
+    certificate_no: 'SP-320',
+    issue_date: '2023-07-15',
+    phone: '7668687048',
+    enrollment_no: 'EN-320',
+    duration: '2022–2023',
+    marks: '85%',
+    grade: 'A',
+    subject: 'Computer Office Automation (COA)',
+  },
+  {
     id: '11111111-1111-1111-1111-111111111111',
     roll_no: '10101',
     student_name: 'Rahul Sharma',
     father_name: 'Vijay Sharma',
+    mother_name: 'Sunita Sharma',
     course: 'Diploma in Computer Application (DCA)',
     session: '2023-2024',
     start_date: '2023-07-01',
@@ -26,6 +52,7 @@ export const INITIAL_MOCK_STUDENTS: StudentRecord[] = [
     roll_no: '10102',
     student_name: 'Priya Patel',
     father_name: 'Ramesh Patel',
+    mother_name: 'Geeta Patel',
     course: 'Post Graduate Diploma in Computer Application (PGDCA)',
     session: '2023-2024',
     start_date: '2023-08-01',
@@ -46,6 +73,7 @@ export const INITIAL_MOCK_STUDENTS: StudentRecord[] = [
     roll_no: '10103',
     student_name: 'Amit Kumar',
     father_name: 'Suresh Kumar',
+    mother_name: 'Kavita Kumar',
     course: 'Advanced Diploma in Financial Accounting (ADFA)',
     session: '2023-2024',
     start_date: '2023-06-01',
@@ -65,6 +93,7 @@ export const INITIAL_MOCK_STUDENTS: StudentRecord[] = [
     roll_no: 'TEST001',
     student_name: 'Test Student',
     father_name: 'Test Father',
+    mother_name: 'Test Mother',
     course: 'DCA',
     session: '2023-2024',
     start_date: '2023-07-01',
@@ -133,7 +162,30 @@ export function getStoredStudents(): StudentRecord[] {
       localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_MOCK_STUDENTS));
       return INITIAL_MOCK_STUDENTS;
     }
-    return JSON.parse(data);
+    const parsed: StudentRecord[] = JSON.parse(data);
+    let changed = false;
+    const hasPriyanka = parsed.some((s) => s.roll_no === '320');
+    if (!hasPriyanka) {
+      changed = true;
+      parsed.unshift(INITIAL_MOCK_STUDENTS[0]);
+    }
+    const updated = parsed.map((s) => {
+      if (!s.mother_name) {
+        changed = true;
+        const initial = INITIAL_MOCK_STUDENTS.find(
+          (m) => m.roll_no === s.roll_no || m.student_id === s.student_id || m.id === s.id
+        );
+        return {
+          ...s,
+          mother_name: initial?.mother_name || (s.roll_no === '320' ? 'Mrs. Anita Devi' : 'Sunita Sharma'),
+        };
+      }
+      return s;
+    });
+    if (changed) {
+      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(updated));
+    }
+    return updated;
   } catch (e) {
     return INITIAL_MOCK_STUDENTS;
   }
@@ -156,6 +208,7 @@ export function addStoredStudent(studentData: any): StudentRecord {
     roll_no: rollNo,
     student_name: name,
     father_name: studentData.father_name || '',
+    mother_name: studentData.mother_name || '',
     course: studentData.course || '',
     session: studentData.session || '',
     start_date: studentData.start_date || null,
@@ -206,14 +259,25 @@ export function updateStoredStudent(id: string, updates: Partial<StudentRecord>)
 }
 
 export function deleteStoredStudent(id: string): boolean {
+  const cleanId = (id || '').trim().toLowerCase();
+  if (!cleanId) return false;
+
   const students = getStoredStudents();
   const target = students.find(
-    (s) => s.id === id || s.roll_no === id || s.student_id === id || s.roll_number === id
+    (s) =>
+      (s.id && s.id.toLowerCase() === cleanId) ||
+      (s.roll_no && s.roll_no.toLowerCase() === cleanId) ||
+      (s.student_id && s.student_id.toLowerCase() === cleanId) ||
+      (s.roll_number && s.roll_number.toLowerCase() === cleanId)
   );
   if (!target) return false;
 
   const filtered = students.filter(
-    (s) => s.id !== id && s.roll_no !== id && s.student_id !== id && s.roll_number !== id
+    (s) =>
+      (s.id || '').toLowerCase() !== cleanId &&
+      (s.roll_no || '').toLowerCase() !== cleanId &&
+      (s.student_id || '').toLowerCase() !== cleanId &&
+      (s.roll_number || '').toLowerCase() !== cleanId
   );
   saveStoredStudents(filtered);
   addAuditLog('DELETE_STUDENT', 'student', target.roll_no, { name: target.student_name || target.name });

@@ -94,6 +94,11 @@ export default function StudentDashboard() {
             </div>
 
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Mother Name</p>
+              <p className="text-base font-semibold text-slate-900 dark:text-white">{student.mother_name || 'Not specified'}</p>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1">
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Mobile Number</p>
               <p className="text-base font-mono font-semibold text-slate-900 dark:text-white">{student.mobile_no || student.phone || 'Not provided'}</p>
             </div>

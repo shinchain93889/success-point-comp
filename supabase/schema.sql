@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS public.students (
     roll_no TEXT UNIQUE NOT NULL,
     student_name TEXT NOT NULL,
     father_name TEXT NOT NULL,
+    mother_name TEXT,
     course TEXT NOT NULL,
     session TEXT NOT NULL,
     start_date DATE,
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS public.students (
 );
 
 -- Migration helpers if table already exists in Supabase:
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS mother_name TEXT;
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS mobile_no TEXT;
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS course_status TEXT NOT NULL DEFAULT 'pending';
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS start_date DATE;
@@ -189,13 +191,14 @@ CREATE POLICY "Admin manage certificates" ON storage.objects FOR ALL USING (buck
 -- -------------------------------------------------------
 -- 7. SEED DATA & SAMPLE INSERT (INCLUDES START/END DATES)
 -- -------------------------------------------------------
-INSERT INTO public.students (roll_no, student_name, father_name, course, session, start_date, end_date, mobile_no, course_status, certificate_url)
+INSERT INTO public.students (roll_no, student_name, father_name, mother_name, course, session, start_date, end_date, mobile_no, course_status, certificate_url)
 VALUES 
-('10101', 'Rahul Sharma', 'Vijay Sharma', 'Diploma in Computer Application (DCA)', '2023-2024', '2023-07-01', '2024-06-30', '+91 9876543210', 'completed', NULL),
-('10102', 'Priya Patel', 'Ramesh Patel', 'Post Graduate Diploma in Computer Application (PGDCA)', '2023-2024', '2023-08-01', '2024-07-31', '+91 9876543211', 'pending', NULL),
-('10103', 'Amit Kumar', 'Suresh Kumar', 'Advanced Diploma in Financial Accounting (ADFA)', '2023-2024', '2023-06-01', '2024-05-31', '+91 9876543212', 'completed', NULL),
-('TEST001', 'Test Student', 'Test Father', 'DCA', '2023-2024', '2023-07-01', '2024-06-30', '+91 9999999999', 'pending', NULL)
+('10101', 'Rahul Sharma', 'Vijay Sharma', 'Sunita Sharma', 'Diploma in Computer Application (DCA)', '2023-2024', '2023-07-01', '2024-06-30', '+91 9876543210', 'completed', NULL),
+('10102', 'Priya Patel', 'Ramesh Patel', 'Geeta Patel', 'Post Graduate Diploma in Computer Application (PGDCA)', '2023-2024', '2023-08-01', '2024-07-31', '+91 9876543211', 'pending', NULL),
+('10103', 'Amit Kumar', 'Suresh Kumar', 'Kavita Kumar', 'Advanced Diploma in Financial Accounting (ADFA)', '2023-2024', '2023-06-01', '2024-05-31', '+91 9876543212', 'completed', NULL),
+('TEST001', 'Test Student', 'Test Father', 'Test Mother', 'DCA', '2023-2024', '2023-07-01', '2024-06-30', '+91 9999999999', 'pending', NULL)
 ON CONFLICT (roll_no) DO UPDATE SET
+    mother_name = EXCLUDED.mother_name,
     start_date = EXCLUDED.start_date,
     end_date = EXCLUDED.end_date,
     mobile_no = EXCLUDED.mobile_no,

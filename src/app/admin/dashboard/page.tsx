@@ -44,11 +44,11 @@ export default function AdminDashboardPage() {
 
   const handleExportStudentsCSV = () => {
     if (students.length === 0) return;
-    const headers = 'Roll No,Student Name,Father Name,Course,Session,Certificate URL\n';
+    const headers = 'Roll No,Student Name,Father Name,Mother Name,Course,Session,Certificate URL\n';
     const rows = students
       .map(
         (s) =>
-          `"${s.roll_no || s.student_id}","${s.student_name || s.name}","${s.father_name}","${s.course}","${s.session}","${s.certificate_url || s.pdf_url || ''}"`
+          `"${s.roll_no || s.student_id}","${s.student_name || s.name}","${s.father_name}","${s.mother_name || ''}","${s.course}","${s.session}","${s.certificate_url || s.pdf_url || ''}"`
       )
       .join('\n');
 

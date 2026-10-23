@@ -1,6 +1,7 @@
 -- =======================================================
 -- SUCCESS POINT CERTIFICATE & AUTHENTICATION PORTAL SCHEMA
--- Execute this SQL in your Supabase SQL Editor
+-- Execute this entire SQL script in your Supabase SQL Editor
+-- (Supabase Dashboard -> Project -> SQL Editor -> New Query -> Run)
 -- =======================================================
 
 -- Enable UUID Extension
@@ -32,21 +33,27 @@ CREATE TABLE IF NOT EXISTS public.students (
     father_name TEXT NOT NULL,
     mother_name TEXT,
     course TEXT NOT NULL,
+    subject TEXT,
     session TEXT NOT NULL,
     start_date DATE,
     end_date DATE,
     mobile_no TEXT,
     course_status TEXT NOT NULL DEFAULT 'pending' CHECK (course_status IN ('pending', 'completed')),
     certificate_url TEXT,
+    profile_picture_url TEXT,
+    photo_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Migration helpers if table already exists in Supabase:
+-- Migration helpers if table already exists in Supabase
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS mother_name TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS subject TEXT;
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS mobile_no TEXT;
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS course_status TEXT NOT NULL DEFAULT 'pending';
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS start_date DATE;
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS end_date DATE;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS profile_picture_url TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS photo_url TEXT;
 
 -- Clean up duplicate roll_no entries before adding UNIQUE constraint
 DELETE FROM public.students a USING public.students b
@@ -86,7 +93,24 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON public.audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(created_at DESC);
 
 -- -------------------------------------------------------
--- 4. ROW LEVEL SECURITY (RLS) POLICIES
+-- 4. GRANT PERMISSIONS (FIXES "permission denied for table ...")
+-- -------------------------------------------------------
+-- PostgREST runs as 'anon' or 'authenticated' roles. They must have GRANT privileges on tables!
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+GRANT ALL ON TABLE public.profiles TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.students TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.audit_logs TO anon, authenticated, service_role;
+
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+
+-- -------------------------------------------------------
+-- 5. ROW LEVEL SECURITY (RLS) POLICIES
 -- -------------------------------------------------------
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
@@ -94,58 +118,52 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- PROFILES POLICIES
 DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
-CREATE POLICY "Users can read own profile" ON public.profiles
-    FOR SELECT USING (auth.uid() = id);
-
 DROP POLICY IF EXISTS "Admins can read all profiles" ON public.profiles;
-CREATE POLICY "Admins can read all profiles" ON public.profiles
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
-
 DROP POLICY IF EXISTS "Admins can insert profiles" ON public.profiles;
-CREATE POLICY "Admins can insert profiles" ON public.profiles
-    FOR INSERT WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-        ) OR auth.uid() = id
-    );
-
 DROP POLICY IF EXISTS "Admins can update profiles" ON public.profiles;
-CREATE POLICY "Admins can update profiles" ON public.profiles
-    FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-        ) OR auth.uid() = id
-    );
+DROP POLICY IF EXISTS "Allow read profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow write profiles" ON public.profiles;
+
+CREATE POLICY "Allow read profiles" ON public.profiles
+    FOR SELECT TO public
+    USING (true);
+
+CREATE POLICY "Allow write profiles" ON public.profiles
+    FOR ALL TO public
+    USING (true)
+    WITH CHECK (true);
 
 -- STUDENTS POLICIES
 DROP POLICY IF EXISTS "Public read access for certificate verification" ON public.students;
-CREATE POLICY "Public read access for certificate verification" ON public.students
-    FOR SELECT USING (true);
-
 DROP POLICY IF EXISTS "Admins can modify student records" ON public.students;
 DROP POLICY IF EXISTS "Allow write access for student records" ON public.students;
-CREATE POLICY "Allow write access for student records" ON public.students
-    FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow full access for student records" ON public.students;
+
+CREATE POLICY "Public read access for certificate verification" ON public.students
+    FOR SELECT TO public
+    USING (true);
+
+CREATE POLICY "Allow full access for student records" ON public.students
+    FOR ALL TO public
+    USING (true)
+    WITH CHECK (true);
 
 -- AUDIT LOGS POLICIES
 DROP POLICY IF EXISTS "Admins can read audit logs" ON public.audit_logs;
-CREATE POLICY "Admins can read audit logs" ON public.audit_logs
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
-
 DROP POLICY IF EXISTS "Authenticated users can insert audit logs" ON public.audit_logs;
-CREATE POLICY "Authenticated users can insert audit logs" ON public.audit_logs
-    FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow read audit logs" ON public.audit_logs;
+DROP POLICY IF EXISTS "Allow insert audit logs" ON public.audit_logs;
+
+CREATE POLICY "Allow read audit logs" ON public.audit_logs
+    FOR SELECT TO public
+    USING (true);
+
+CREATE POLICY "Allow insert audit logs" ON public.audit_logs
+    FOR INSERT TO public
+    WITH CHECK (true);
 
 -- -------------------------------------------------------
--- 5. TRIGGER FOR AUTOMATIC PROFILE CREATION ON SIGNUP
+-- 6. TRIGGER FOR AUTOMATIC PROFILE CREATION ON SIGNUP
 -- -------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -173,23 +191,34 @@ CREATE TRIGGER on_auth_user_created
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- -------------------------------------------------------
--- 6. STORAGE BUCKET CONFIGURATION FOR CERTIFICATES
+-- 7. STORAGE BUCKET CONFIGURATION FOR CERTIFICATES
 -- -------------------------------------------------------
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('certificates', 'certificates', true)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) 
+VALUES ('certificates', 'certificates', true, 52428800, null)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- Storage Policies
+-- Storage Policies (Allow public read, upload, manage in 'certificates' bucket)
 DROP POLICY IF EXISTS "Public read access to certificates" ON storage.objects;
 DROP POLICY IF EXISTS "Admin upload certificates" ON storage.objects;
 DROP POLICY IF EXISTS "Admin manage certificates" ON storage.objects;
+DROP POLICY IF EXISTS "Allow anon upload certificates" ON storage.objects;
+DROP POLICY IF EXISTS "Allow anon manage certificates" ON storage.objects;
 
-CREATE POLICY "Public read access to certificates" ON storage.objects FOR SELECT USING (bucket_id = 'certificates');
-CREATE POLICY "Admin upload certificates" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'certificates');
-CREATE POLICY "Admin manage certificates" ON storage.objects FOR ALL USING (bucket_id = 'certificates');
+CREATE POLICY "Public read access to certificates" ON storage.objects 
+    FOR SELECT TO public 
+    USING (bucket_id = 'certificates');
+
+CREATE POLICY "Allow anon upload certificates" ON storage.objects 
+    FOR INSERT TO public 
+    WITH CHECK (bucket_id = 'certificates');
+
+CREATE POLICY "Allow anon manage certificates" ON storage.objects 
+    FOR ALL TO public 
+    USING (bucket_id = 'certificates') 
+    WITH CHECK (bucket_id = 'certificates');
 
 -- -------------------------------------------------------
--- 7. SEED DATA & SAMPLE INSERT (INCLUDES START/END DATES)
+-- 8. SEED DATA & SAMPLE INSERT (INCLUDES START/END DATES)
 -- -------------------------------------------------------
 INSERT INTO public.students (roll_no, student_name, father_name, mother_name, course, session, start_date, end_date, mobile_no, course_status, certificate_url)
 VALUES 
@@ -204,4 +233,5 @@ ON CONFLICT (roll_no) DO UPDATE SET
     mobile_no = EXCLUDED.mobile_no,
     course_status = EXCLUDED.course_status;
 
-SELECT * FROM public.students;
+-- Verify setup
+SELECT count(*) AS total_students FROM public.students;

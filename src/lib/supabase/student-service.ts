@@ -396,9 +396,13 @@ export async function createStudent(
 
           if (insertRes.error.code === '23505') {
             throw new Error(`Student record with Roll No '${rollNo}' already exists.`);
-          } else if (insertRes.error.code === '42501' || errDetail.toLowerCase().includes('row-level security')) {
+          } else if (
+            insertRes.error.code === '42501' ||
+            errDetail.toLowerCase().includes('row-level security') ||
+            errDetail.toLowerCase().includes('permission denied')
+          ) {
             throw new Error(
-              `Supabase RLS Policy Error: Row-Level Security is blocking insert on table 'students'. Please run schema.sql in Supabase SQL Editor.`
+              `Supabase Permission Error: Database is blocking insert on table 'students' (${errDetail}). Please execute the updated supabase/schema.sql in your Supabase SQL Editor to grant table & storage permissions.`
             );
           } else {
             throw new Error(`Supabase Error (${insertRes.error.code || 'UNKNOWN'}): ${errDetail}`);
@@ -657,11 +661,12 @@ export async function updateStudent(
       const isRlsError =
         errMsg.toLowerCase().includes('row-level security') ||
         errMsg.toLowerCase().includes('violates') ||
+        errMsg.toLowerCase().includes('permission denied') ||
         lastError?.code === '42501';
 
       if (isRlsError) {
         throw new Error(
-          'Supabase RLS Policy Error: Row Level Security is blocking updates on table "students". Please run the SQL policy in schema.sql in your Supabase SQL Editor.'
+          'Supabase Permission Error: Database is blocking updates on table "students". Please execute the updated supabase/schema.sql in your Supabase SQL Editor.'
         );
       }
 

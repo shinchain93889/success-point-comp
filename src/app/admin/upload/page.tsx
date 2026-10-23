@@ -45,7 +45,7 @@ function AdminUploadPageContent() {
     start_date: '',
     end_date: '',
     mobile_no: '',
-    course_status: 'pending' as 'pending' | 'completed',
+    course_status: 'completed' as 'pending' | 'completed',
     certificate_url: '',
   });
   const [singleCertFile, setSingleCertFile] = useState<File | null>(null);
@@ -167,7 +167,7 @@ function AdminUploadPageContent() {
         start_date: '',
         end_date: '',
         mobile_no: '',
-        course_status: 'pending',
+        course_status: 'completed',
         certificate_url: '',
       });
       setSingleCertFile(null);

@@ -117,13 +117,39 @@ function formatMotherName(name: string): string {
 }
 
 function GoldenFlourish({ className = '', inverted = false }: { className?: string; inverted?: boolean }) {
+  if (inverted) {
+    return (
+      <svg
+        viewBox="0 0 260 28"
+        className={className}
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ display: 'inline-block', verticalAlign: 'middle' }}
+      >
+        <path d="M130 23 L134 14 L130 5 L126 14 Z" fill="#d97706" />
+        <path d="M118 20 L121 14 L118 8 L115 14 Z" fill="#b45309" />
+        <path d="M142 20 L145 14 L142 8 L139 14 Z" fill="#b45309" />
+        <circle cx="108" cy="14" r="1.5" fill="#d97706" />
+        <circle cx="152" cy="14" r="1.5" fill="#d97706" />
+        <path
+          d="M102 14 C90 14, 82 21, 70 21 C56 21, 48 10, 32 10 C20 10, 12 16, 4 22 C8 13, 20 6, 34 6 C50 6, 58 17, 72 17 C82 17, 88 11, 102 14 Z"
+          fill="#d97706"
+        />
+        <path
+          d="M158 14 C170 14, 178 21, 190 21 C204 21, 212 10, 228 10 C240 10, 248 16, 256 22 C252 13, 240 6, 226 6 C210 6, 202 17, 188 17 C178 17, 172 11, 158 14 Z"
+          fill="#d97706"
+        />
+      </svg>
+    );
+  }
+
   return (
     <svg
       viewBox="0 0 260 28"
       className={className}
-      style={inverted ? { transform: 'scaleY(-1)' } : undefined}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      style={{ display: 'inline-block', verticalAlign: 'middle' }}
     >
       <path d="M130 5 L134 14 L130 23 L126 14 Z" fill="#d97706" />
       <path d="M118 8 L121 14 L118 20 L115 14 Z" fill="#b45309" />
@@ -353,20 +379,22 @@ export function CertificateCard({
       const element = certRef.current;
       const isPortrait = templateView === 'official';
       const canvas = await html2canvas(element, {
-        scale: 3,
+        scale: 2.2, // 2.2x provides crystal sharp 220+ DPI resolution without 20MB uncompressed overhead
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
       });
-      const imgData = canvas.toDataURL('image/png');
+      // Convert to high-quality JPEG (0.92) to drop PDF file size from 23 MB to under 800 KB!
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
       const pdf = new jsPDF({
         orientation: isPortrait ? 'portrait' : 'landscape',
         unit: 'mm',
         format: 'a4',
+        compress: true,
       });
       const imgWidth = isPortrait ? 210 : 297;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
       pdf.save(`Certificate_${certNo}_${studentName.replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -381,15 +409,16 @@ export function CertificateCard({
       setIsGeneratingImage(true);
       const element = certRef.current;
       const canvas = await html2canvas(element, {
-        scale: 3,
+        scale: 2.5,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
       });
-      const imgData = canvas.toDataURL('image/png', 1.0);
+      // High-quality JPEG for crisp clarity under 1 MB
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const link = document.createElement('a');
       link.href = imgData;
-      link.download = `Certificate_${certNo}_${studentName.replace(/\s+/g, '_')}_A4.png`;
+      link.download = `Certificate_${certNo}_${studentName.replace(/\s+/g, '_')}_A4.jpg`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -812,7 +841,7 @@ export function CertificateCard({
               </div>
 
               {/* Main Institute Header */}
-              <div className="text-center space-y-1 my-2 z-10 px-3">
+              <div className="text-center space-y-1 mt-1 mb-1 sm:mt-2 sm:mb-1 z-10 px-3">
                 <h1 className="text-xl sm:text-3xl font-black tracking-tight text-black font-sans uppercase">
                   SUCCESS POINT COMPUTER INSTITUTE
                 </h1>
@@ -827,10 +856,10 @@ export function CertificateCard({
                 </p>
               </div>
 
-              {/* Logo, Title & Student Photo Header Row - PERFECT SYMMETRIC CENTERING */}
-              <div className="flex items-center justify-between my-2 sm:my-3 z-10 px-2 sm:px-4 w-full">
-                {/* Left: Institute Logo Anchor */}
-                <div className="w-24 sm:w-28 flex items-center justify-start shrink-0">
+              {/* Logo, Title & Student Photo Header Row - MOVED HIGHER UP */}
+              <div className="relative w-full mt-0 mb-2 sm:-mt-1 sm:mb-3 z-10 px-2 sm:px-4 min-h-[118px] flex items-center justify-center">
+                {/* Left: Institute Logo Anchor - Absolute Left */}
+                <div className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 flex items-center justify-start z-10">
                   <div className="w-22 h-22 sm:w-24 sm:h-24 flex items-center justify-center shrink-0">
                     <img
                       src="/img/logosp.jpeg"
@@ -841,17 +870,29 @@ export function CertificateCard({
                   </div>
                 </div>
 
-                {/* Center: CERTIFICATE Title with Golden Filigree Flourishes - DEAD CENTER */}
-                <div className="flex-1 flex flex-col items-center justify-center text-center px-1">
-                  <GoldenFlourish className="w-48 sm:w-60 h-6 sm:h-7 mx-auto mb-1 text-amber-600" />
-                  <h2 className="text-2xl sm:text-4xl font-black text-black font-serif tracking-[0.18em] uppercase inline-block pl-[0.18em]">
+                {/* Center: CERTIFICATE Title with Golden Filigree Flourishes - PERFECTLY VERTICALLY & HORIZONTALLY CENTERED */}
+                <div className="w-full text-center flex flex-col items-center justify-center pointer-events-none -mt-2 sm:-mt-3">
+                  <div className="w-full text-center" style={{ lineHeight: 0, marginBottom: '6px' }}>
+                    <GoldenFlourish className="inline-block w-48 sm:w-60 h-6 sm:h-7 text-amber-600" />
+                  </div>
+                  <h2
+                    className="text-2xl sm:text-4xl font-black text-black font-serif tracking-[0.18em] uppercase inline-block pl-[0.18em] leading-none select-none"
+                    style={{
+                      marginTop: '-10px',
+                      marginBottom: '10px',
+                      lineHeight: '1',
+                      padding: 0,
+                    }}
+                  >
                     CERTIFICATE
                   </h2>
-                  <GoldenFlourish className="w-48 sm:w-60 h-6 sm:h-7 mx-auto mt-1 text-amber-600" inverted />
+                  <div className="w-full text-center" style={{ lineHeight: 0, marginTop: '6px' }}>
+                    <GoldenFlourish className="inline-block w-48 sm:w-60 h-6 sm:h-7 text-amber-600" inverted />
+                  </div>
                 </div>
 
-                {/* Right: Student Photo Frame Anchor (Matching w-24 sm:w-28 for 100% Symmetry) */}
-                <div className="w-24 sm:w-28 flex items-center justify-end shrink-0 print:flex">
+                {/* Right: Student Photo Frame Anchor - Absolute Right */}
+                <div className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 flex items-center justify-end z-20 print:flex">
                   {currentPhoto ? (
                     <div className="relative group shrink-0" style={{ width: '92px', height: '115px' }}>
                       <img

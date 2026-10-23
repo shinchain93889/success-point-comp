@@ -7,9 +7,13 @@ function sanitizeUrl(url: string | undefined): string {
 }
 
 export function createClient() {
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawUrl = process.env.PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseUrl = sanitizeUrl(rawUrl);
-  const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+  const supabaseAnonKey = (
+    process.env.PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    ''
+  ).trim();
 
   if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('placeholder-project')) {
     return createBrowserClient(
@@ -22,9 +26,13 @@ export function createClient() {
 }
 
 export function isSupabaseConfigured(): boolean {
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawUrl = process.env.PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseUrl = sanitizeUrl(rawUrl);
-  const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+  const supabaseAnonKey = (
+    process.env.PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    ''
+  ).trim();
   return Boolean(
     supabaseUrl &&
     supabaseAnonKey &&
@@ -34,6 +42,11 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export const supabase = createSupabaseClient(
-  sanitizeUrl(process.env.NEXT_PUBLIC_SUPABASE_URL) || 'https://placeholder-project.supabase.co',
-  (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key').trim()
+  sanitizeUrl(process.env.PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL) ||
+    'https://placeholder-project.supabase.co',
+  (
+    process.env.PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    'placeholder-anon-key'
+  ).trim()
 );

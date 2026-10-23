@@ -281,7 +281,7 @@ function VerificationContent() {
               </div>
 
               {/* Render Printable Certificate Card component */}
-              <div id="certificate-card" className="pt-4 text-slate-900">
+              <div id="certificate-card" className="pt-4 text-slate-900 w-full flex justify-center items-center">
                 <CertificateCard student={student} showActions={true} />
               </div>
             </div>

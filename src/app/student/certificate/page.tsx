@@ -59,7 +59,9 @@ export default function StudentCertificatePage() {
           </span>
         </div>
 
-        <CertificateCard student={student} showActions={true} />
+        <div className="w-full flex justify-center items-center">
+          <CertificateCard student={student} showActions={true} />
+        </div>
       </main>
     </div>
   );

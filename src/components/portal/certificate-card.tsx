@@ -120,7 +120,8 @@ function GoldenFlourish({ className = '', inverted = false }: { className?: stri
   return (
     <svg
       viewBox="0 0 260 28"
-      className={`${className} ${inverted ? 'rotate-180' : ''}`}
+      className={className}
+      style={inverted ? { transform: 'scaleY(-1)' } : undefined}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -779,16 +780,17 @@ export function CertificateCard({
       )}
 
       {/* Printable Certificate Frame */}
-      <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl print:p-0 print:bg-transparent printable-certificate-wrapper flex justify-center w-full">
+      <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl print:p-0 print:bg-transparent printable-certificate-wrapper flex justify-center items-center w-full">
         {templateView === 'official' ? (
           /* Official Institute Portrait A4 Template with Designer Border */
           <div
             ref={certRef}
-            className="printable-certificate w-full max-w-[210mm] bg-[#fffdfa] text-slate-900 border-[10px] sm:border-[12px] border-double border-amber-600 p-3 sm:p-5 shadow-2xl rounded-xs flex flex-col justify-between print:shadow-none print:border-[10px] print:p-4 font-sans relative box-border"
+            className="printable-certificate mx-auto w-full max-w-[210mm] bg-[#fffdfa] text-slate-900 border-[10px] sm:border-[12px] border-double border-amber-600 p-3 sm:p-5 shadow-2xl rounded-xs flex flex-col justify-between print:shadow-none print:border-[10px] print:p-4 font-sans relative box-border"
             style={{
               aspectRatio: '1 / 1.414',
               minHeight: '290mm',
               boxSizing: 'border-box',
+              margin: '0 auto',
             }}
           >
             {/* Designer Inner Border & Corner Ornaments */}
@@ -825,38 +827,38 @@ export function CertificateCard({
                 </p>
               </div>
 
-              {/* Logo, Title & Student Photo Grid */}
-              <div className="grid grid-cols-3 items-center my-2 sm:my-3 z-10 px-2 sm:px-4">
-                {/* Left: Institute Logo - FULL PROMINENT SIZE */}
-                <div className="flex justify-start items-center pl-1 sm:pl-2">
-                  <div className="w-22 h-22 sm:w-26 sm:h-26 flex items-center justify-center shrink-0">
+              {/* Logo, Title & Student Photo Header Row - PERFECT SYMMETRIC CENTERING */}
+              <div className="flex items-center justify-between my-2 sm:my-3 z-10 px-2 sm:px-4 w-full">
+                {/* Left: Institute Logo Anchor */}
+                <div className="w-24 sm:w-28 flex items-center justify-start shrink-0">
+                  <div className="w-22 h-22 sm:w-24 sm:h-24 flex items-center justify-center shrink-0">
                     <img
                       src="/img/logosp.jpeg"
                       alt="Success Point Logo"
                       className="max-w-full max-h-full object-contain"
-                      style={{ width: '96px', height: '96px', objectFit: 'contain' }}
+                      style={{ width: '92px', height: '92px', objectFit: 'contain' }}
                     />
                   </div>
                 </div>
 
-                {/* Center: CERTIFICATE Title with Golden Filigree Flourishes */}
-                <div className="text-center flex flex-col items-center justify-center">
-                  <GoldenFlourish className="w-44 sm:w-56 h-6 sm:h-7 mx-auto mb-1 text-amber-600" />
-                  <h2 className="text-2xl sm:text-4xl font-black text-black font-serif tracking-widest inline-block px-2 py-0.5">
+                {/* Center: CERTIFICATE Title with Golden Filigree Flourishes - DEAD CENTER */}
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-1">
+                  <GoldenFlourish className="w-48 sm:w-60 h-6 sm:h-7 mx-auto mb-1 text-amber-600" />
+                  <h2 className="text-2xl sm:text-4xl font-black text-black font-serif tracking-[0.18em] uppercase inline-block pl-[0.18em]">
                     CERTIFICATE
                   </h2>
-                  <GoldenFlourish className="w-44 sm:w-56 h-6 sm:h-7 mx-auto mt-1 text-amber-600" inverted />
+                  <GoldenFlourish className="w-48 sm:w-60 h-6 sm:h-7 mx-auto mt-1 text-amber-600" inverted />
                 </div>
 
-                {/* Right: Student Photo Frame - FULL PASSPORT SIZE WITH GOLD BORDER */}
-                <div className="flex justify-end pr-1 sm:pr-2 print:block">
+                {/* Right: Student Photo Frame Anchor (Matching w-24 sm:w-28 for 100% Symmetry) */}
+                <div className="w-24 sm:w-28 flex items-center justify-end shrink-0 print:flex">
                   {currentPhoto ? (
-                    <div className="relative group shrink-0" style={{ width: '96px', height: '118px' }}>
+                    <div className="relative group shrink-0" style={{ width: '92px', height: '115px' }}>
                       <img
                         src={currentPhoto}
                         alt={studentName}
                         className="w-full h-full object-cover border-2 border-amber-600 shadow-sm rounded-xs"
-                        style={{ width: '96px', height: '118px', objectFit: 'cover' }}
+                        style={{ width: '92px', height: '115px', objectFit: 'cover' }}
                       />
                       {showActions && (
                         <label
@@ -1022,7 +1024,7 @@ export function CertificateCard({
                   <img
                     src="/img/iso.jpg"
                     alt="ISO 9001 Certified"
-                    className="h-14 sm:h-16 max-w-full object-contain"
+                    className="h-16 sm:h-20 max-w-full object-contain"
                   />
                 </div>
 
@@ -1031,7 +1033,7 @@ export function CertificateCard({
                   <img
                     src="/img/digitalindia.png"
                     alt="Digital India - Power To Empower"
-                    className="h-12 sm:h-14 max-w-full object-contain"
+                    className="h-16 sm:h-20 max-w-full object-contain"
                   />
                 </div>
 
@@ -1040,7 +1042,7 @@ export function CertificateCard({
                   <img
                     src="/img/skillindia.jpeg"
                     alt="Skill India - कौशल भारत - कुशल भारत"
-                    className="h-14 sm:h-16 max-w-full object-contain"
+                    className="h-16 sm:h-20 max-w-full object-contain"
                   />
                 </div>
 
@@ -1049,7 +1051,7 @@ export function CertificateCard({
                   <img
                     src="/img/msme.jpeg"
                     alt="Ministry of MSME, Govt. of India"
-                    className="h-12 sm:h-14 max-w-full object-contain"
+                    className="h-16 sm:h-20 max-w-full object-contain"
                   />
                 </div>
               </div>

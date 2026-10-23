@@ -18,11 +18,13 @@ function setRoleCookie(role: 'admin' | 'student' | null) {
 // -------------------------------------------------------
 export function getAdminCredentials() {
   const rawEmail =
+    process.env.PUBLIC_ADMIN_EMAIL ||
     process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
     process.env.ADMIN_EMAIL ||
     'admin@gmail.com';
 
   const rawPassword =
+    process.env.PUBLIC_ADMIN_PASSWORD ||
     process.env.NEXT_PUBLIC_ADMIN_PASSWORD ||
     process.env.ADMIN_PASSWORD ||
     'admin';

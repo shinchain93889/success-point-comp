@@ -80,7 +80,7 @@ export default function VerifyCertificatePage() {
             </div>
 
             {/* Render Certificate Component */}
-            <div className="text-slate-900">
+            <div className="text-slate-900 w-full flex justify-center items-center">
               <CertificateCard student={student} showActions={true} />
             </div>
           </div>

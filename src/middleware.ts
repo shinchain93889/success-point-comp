@@ -9,6 +9,7 @@ export async function middleware(request: NextRequest) {
 
   // Determine configured admin email
   const envAdminEmail = (
+    process.env.PUBLIC_ADMIN_EMAIL ||
     process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
     process.env.ADMIN_EMAIL ||
     'admin@gmail.com'

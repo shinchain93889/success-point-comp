@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useRef, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { CertificateQRCode } from './qr-code';
@@ -20,10 +22,23 @@ import {
   X,
   GraduationCap,
   BookOpen,
+  Percent,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { uploadStudentPhotoFile, updateStudent } from '@/lib/supabase/student-service';
+
+export function calculateGradeFromMarks(marksStr?: string | null): string {
+  if (!marksStr) return 'A';
+  const numericVal = parseFloat(marksStr.replace(/[^0-9.]/g, ''));
+  if (isNaN(numericVal)) return 'A';
+  if (numericVal >= 85) return 'A+';
+  if (numericVal >= 75) return 'A';
+  if (numericVal >= 60) return 'B';
+  if (numericVal >= 50) return 'C';
+  if (numericVal >= 40) return 'D';
+  return 'F';
+}
 
 export const INSTITUTE_COURSES = [
   'Computer Office Automation (COA)',
@@ -115,6 +130,45 @@ function formatMotherName(name: string): string {
   return `Mrs. ${clean}`;
 }
 
+function withTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(resolve, timeoutMs);
+    promise.then(
+      () => {
+        window.clearTimeout(timeout);
+        resolve();
+      },
+      () => {
+        window.clearTimeout(timeout);
+        resolve();
+      },
+    );
+  });
+}
+
+async function waitForCertificateAssets(element: HTMLElement) {
+  const fontReady = document.fonts?.ready ?? Promise.resolve();
+  await withTimeout(fontReady, 5000);
+
+  await Promise.all(Array.from(element.querySelectorAll('img')).map(async (image) => {
+    if (!image.complete) {
+      await new Promise<void>((resolve) => {
+        const timeout = window.setTimeout(resolve, 10000);
+        const finish = () => {
+          window.clearTimeout(timeout);
+          resolve();
+        };
+        image.addEventListener('load', finish, { once: true });
+        image.addEventListener('error', finish, { once: true });
+      });
+    }
+
+    if (image.complete && image.naturalWidth > 0 && typeof image.decode === 'function') {
+      await withTimeout(image.decode(), 2000);
+    }
+  }));
+}
+
 export function CertificateCard({
   student,
   showActions = true,
@@ -151,6 +205,16 @@ export function CertificateCard({
   const [courseInput, setCourseInput] = useState<string>(initialCourse);
   const [subjectInput, setSubjectInput] = useState<string>(initialSubject);
 
+  // Percentage & Grade Configuration State
+  const initialMarks = student.marks || '85%';
+  const initialGrade = student.grade || calculateGradeFromMarks(initialMarks);
+  const [currentMarks, setCurrentMarks] = useState<string>(initialMarks);
+  const [currentGrade, setCurrentGrade] = useState<string>(initialGrade);
+  const [isEditingPercentage, setIsEditingPercentage] = useState<boolean>(false);
+  const [isSavingPercentage, setIsSavingPercentage] = useState<boolean>(false);
+  const [marksInput, setMarksInput] = useState<string>(initialMarks);
+  const [gradeInput, setGradeInput] = useState<string>(initialGrade);
+
   useEffect(() => {
     setCurrentPhoto(student.profile_picture_url || student.photo_url || student.student_image || null);
     if (student.mother_name) {
@@ -163,6 +227,13 @@ export function CertificateCard({
     setCourseInput(c);
     setSubjectInput(s);
     setSelectedCoursePreset(INSTITUTE_COURSES.includes(c) ? c : 'custom');
+
+    const m = student.marks || '85%';
+    const g = student.grade || calculateGradeFromMarks(m);
+    setCurrentMarks(m);
+    setCurrentGrade(g);
+    setMarksInput(m);
+    setGradeInput(g);
   }, [student]);
 
   const handleSaveMotherName = async () => {
@@ -227,6 +298,34 @@ export function CertificateCard({
     }
   };
 
+  const handleSavePercentage = async () => {
+    let cleanMarks = marksInput.trim();
+    if (!cleanMarks) cleanMarks = '85%';
+    if (/^\d+(\.\d+)?$/.test(cleanMarks)) {
+      cleanMarks = `${cleanMarks}%`;
+    }
+    const cleanGrade = gradeInput.trim() || calculateGradeFromMarks(cleanMarks);
+    try {
+      setIsSavingPercentage(true);
+      const updated = await updateStudent(student.id, {
+        ...student,
+        marks: cleanMarks,
+        grade: cleanGrade,
+      });
+      setCurrentMarks(cleanMarks);
+      setCurrentGrade(cleanGrade);
+      if (updated) {
+        onPhotoUpdated?.(updated);
+        onStudentUpdated?.(updated);
+      }
+      setIsEditingPercentage(false);
+    } catch (err) {
+      console.error('Failed to update percentage & grade:', err);
+    } finally {
+      setIsSavingPercentage(false);
+    }
+  };
+
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -269,9 +368,22 @@ export function CertificateCard({
   const session = student.session || student.duration || '2022–2023';
   const duration = session;
   const subject = currentSubject;
-  const marks = student.marks || '85%';
-  const grade = student.grade || 'A';
+  const marks = currentMarks;
+  const grade = currentGrade;
   const certUrl = student.certificate_url || student.pdf_url;
+  const dynamicCertificateTextLength = [
+    studentName,
+    fatherName,
+    showMotherName ? motherName : '',
+    rollNo,
+    enrollNo,
+    course,
+    showSubject ? subject : '',
+    session,
+    marks,
+    grade,
+  ].reduce((length, value) => length + value.length, 0);
+  const useCompactCertificateBody = dynamicCertificateTextLength > 250;
 
   const verificationUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/verify?roll_no=${rollNo}`
@@ -298,21 +410,50 @@ export function CertificateCard({
       setIsGenerating(true);
       const element = certRef.current;
       const isPortrait = templateView === 'official';
+      // Keep PDF capture at the certificate's A4 CSS-pixel dimensions so responsive
+      // preview width and dynamic student text cannot change the frame geometry.
+      const pageWidth = isPortrait ? 794 : 1123;
+      const pageHeight = isPortrait ? 1123 : 794;
+      await waitForCertificateAssets(element);
       const canvas = await html2canvas(element, {
-        scale: 3,
+        scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        imageTimeout: 10000,
+        width: pageWidth,
+        height: pageHeight,
+        windowWidth: pageWidth,
+        windowHeight: pageHeight,
+        onclone: (_clonedDocument, clonedCertificate) => {
+          Object.assign(clonedCertificate.style, {
+            width: `${pageWidth}px`,
+            height: `${pageHeight}px`,
+            maxWidth: 'none',
+            minWidth: `${pageWidth}px`,
+            aspectRatio: 'auto',
+            margin: '0',
+            boxSizing: 'border-box',
+          });
+        },
       });
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
       const pdf = new jsPDF({
         orientation: isPortrait ? 'portrait' : 'landscape',
         unit: 'mm',
         format: 'a4',
       });
-      const imgWidth = isPortrait ? 210 : 297;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      const pageWidthMm = isPortrait ? 210 : 297;
+      const pageHeightMm = isPortrait ? 297 : 210;
+      const fitScale = Math.min(
+        pageWidthMm / canvas.width,
+        pageHeightMm / canvas.height,
+      );
+      const imgWidth = canvas.width * fitScale;
+      const imgHeight = canvas.height * fitScale;
+      const imgX = (pageWidthMm - imgWidth) / 2;
+      const imgY = (pageHeightMm - imgHeight) / 2;
+      pdf.addImage(imgData, 'JPEG', imgX, imgY, imgWidth, imgHeight);
       pdf.save(`Certificate_${certNo}_${studentName.replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -327,7 +468,7 @@ export function CertificateCard({
       setIsGeneratingImage(true);
       const element = certRef.current;
       const canvas = await html2canvas(element, {
-        scale: 3,
+        scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
@@ -433,6 +574,7 @@ export function CertificateCard({
                   onClick={() => {
                     setIsEditingCourse(!isEditingCourse);
                     if (isEditingMotherName) setIsEditingMotherName(false);
+                    if (isEditingPercentage) setIsEditingPercentage(false);
                   }}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${isEditingCourse
                     ? 'bg-amber-500 text-white font-bold shadow-xs'
@@ -445,6 +587,27 @@ export function CertificateCard({
                   <Edit2 className="w-3 h-3 ml-0.5" />
                 </button>
               )}
+            </div>
+
+            {/* Percentage & Grade Quick Option */}
+            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditingPercentage(!isEditingPercentage);
+                  if (isEditingMotherName) setIsEditingMotherName(false);
+                  if (isEditingCourse) setIsEditingCourse(false);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${isEditingPercentage
+                  ? 'bg-amber-500 text-white font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                title="Edit Percentage and Grade on Certificate"
+              >
+                <Percent className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>Percentage: <strong className="font-mono text-blue-700 dark:text-blue-400">{currentMarks}</strong> ({currentGrade})</span>
+                <Edit2 className="w-3 h-3 ml-0.5" />
+              </button>
             </div>
           </div>
 
@@ -694,15 +857,159 @@ export function CertificateCard({
         </div>
       )}
 
+      {/* Percentage & Grade Quick Inline Editor */}
+      {showActions && isEditingPercentage && (
+        <div className="p-4 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 dark:from-slate-900 dark:via-amber-950/30 dark:to-slate-900 border border-amber-300 dark:border-amber-800/80 rounded-xl space-y-3 text-xs print:hidden shadow-md">
+          <div className="flex items-center justify-between border-b border-amber-200/80 dark:border-amber-800/60 pb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-600 text-white flex items-center justify-center shadow-xs">
+                <Percent className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                  Edit Percentage & Grade
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Set the official percentage obtained and corresponding grade shown on this certificate.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEditingPercentage(false)}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-amber-100 dark:hover:bg-slate-800"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {/* Percentage input & presets */}
+            <div className="space-y-1.5">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold flex items-center justify-between">
+                <span>Percentage Obtained:</span>
+                <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono font-medium">e.g. 85% or 92.5%</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={marksInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setMarksInput(val);
+                    const autoGrade = calculateGradeFromMarks(val);
+                    setGradeInput(autoGrade);
+                  }}
+                  placeholder="e.g. 85%"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-lg text-slate-900 dark:text-white font-mono font-bold text-sm focus:ring-2 focus:ring-amber-500"
+                  autoFocus
+                />
+                <Percent className="w-4 h-4 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+              </div>
+
+              {/* Quick Presets */}
+              <div className="pt-1">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
+                  Quick Percentage Presets:
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {['65%', '72%', '78%', '82%', '85%', '88%', '90%', '94%', '98%'].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => {
+                        setMarksInput(pct);
+                        setGradeInput(calculateGradeFromMarks(pct));
+                      }}
+                      className={`text-[10px] px-2 py-0.5 rounded-md border font-mono transition-all ${
+                        marksInput.trim() === pct
+                          ? 'bg-amber-600 text-white border-amber-600 font-bold'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-amber-400'
+                      }`}
+                    >
+                      {pct}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Grade input & presets */}
+            <div className="space-y-1.5">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold flex items-center justify-between">
+                <span>Grade Obtained:</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                  (Auto-calculated from %)
+                </span>
+              </label>
+              <input
+                type="text"
+                value={gradeInput}
+                onChange={(e) => setGradeInput(e.target.value)}
+                placeholder="e.g. A+ or A"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-lg text-slate-900 dark:text-white font-bold text-sm focus:ring-2 focus:ring-amber-500"
+              />
+
+              {/* Grade Presets */}
+              <div className="pt-1">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
+                  Standard Grades:
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {['A+', 'A', 'B+', 'B', 'C'].map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGradeInput(g)}
+                      className={`text-[10px] px-2.5 py-0.5 rounded-md border font-bold transition-all ${
+                        gradeInput.trim() === g
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-blue-400'
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-200/80 dark:border-amber-800/60">
+            <button
+              type="button"
+              onClick={() => setIsEditingPercentage(false)}
+              className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSavePercentage}
+              disabled={isSavingPercentage}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg shadow-sm text-xs disabled:opacity-50 transition-colors"
+            >
+              {isSavingPercentage ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5" />
+              )}
+              <span>Save & Apply to Certificate</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Printable Certificate Frame */}
-      <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl print:p-0 print:bg-transparent printable-certificate-wrapper flex justify-center w-full">
+      <div className={`bg-slate-100 p-2 sm:p-6 rounded-2xl print:p-0 print:bg-transparent printable-certificate-wrapper flex justify-center w-full ${templateView === 'ornamental' ? 'print-landscape' : ''}`}>
         {templateView === 'official' ? (
           /* Official Institute Portrait A4 Template with Designer Border */
           <div
             ref={certRef}
-            className="printable-certificate w-full max-w-[210mm] bg-white text-slate-900 border-[10px] border-double border-amber-600/90 p-4 sm:p-5 shadow-2xl rounded-sm flex flex-col justify-between print:shadow-none print:border-[10px] font-sans relative box-border"
+            className="printable-certificate w-full max-w-[210mm] bg-white text-slate-900 border-[10px] border-double border-amber-600/90 p-4 sm:p-5 shadow-2xl rounded-sm flex flex-col justify-between print:shadow-none print:border-[10px] font-sans relative box-border overflow-hidden"
             style={{
-              aspectRatio: '1 / 1.414',
+              aspectRatio: '210 / 297',
               boxSizing: 'border-box',
             }}
           >
@@ -719,13 +1026,13 @@ export function CertificateCard({
               <div className="absolute bottom-2 right-2 w-10 h-10 border-b border-r border-amber-500/60" />
 
               {/* Top Roll & Enrollment Header */}
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-900 font-sans z-10 px-2">
-                <div>Roll No.: <span className="font-mono text-blue-700 font-bold">{rollNo}</span></div>
-                <div>Enrollment No.: <span className="font-mono text-blue-700 font-bold">{enrollNo}</span></div>
+              <div className="flex shrink-0 items-center justify-between gap-2 text-xs sm:text-sm font-semibold text-slate-900 font-sans z-10 px-2">
+                <div className="min-w-0 break-words">Roll No.: <span className="font-mono text-blue-700 font-bold [overflow-wrap:anywhere]">{rollNo}</span></div>
+                <div className="min-w-0 break-words text-right">Enrollment No.: <span className="font-mono text-blue-700 font-bold [overflow-wrap:anywhere]">{enrollNo}</span></div>
               </div>
 
               {/* Main Institute Header */}
-              <div className="text-center space-y-1 my-2 z-10 px-4">
+              <div className="shrink-0 text-center space-y-1 my-2 z-10 px-4">
                 <h1 className="text-xl sm:text-3xl font-black tracking-tight text-black font-sans uppercase">
                   SUCCESS POINT COMPUTER INSTITUTE
                 </h1>
@@ -741,38 +1048,73 @@ export function CertificateCard({
               </div>
 
               {/* Logo, Title & Student Photo Grid */}
-              <div className="grid grid-cols-3 items-center my-3 z-10 px-3">
+              <div className="grid shrink-0 grid-cols-[100px_1fr_100px] sm:grid-cols-[120px_1fr_120px] items-center my-2 sm:my-3 z-10 px-2 sm:px-3">
                 {/* Left: Institute Logo - INSET WITH SAFE PADDING TO PREVENT CUTOFF */}
-                <div className="flex justify-start items-center pl-2">
-                  <div className="w-22 h-22 sm:w-26 sm:h-26 flex items-center justify-center shrink-0">
+                <div className="flex justify-start items-center pl-1 sm:pl-2">
+                  <div className="w-22 h-22 sm:w-24 sm:h-24 flex items-center justify-center shrink-0">
                     <img
                       src="/img/logosp.jpeg"
                       alt="Success Point Logo"
                       className="max-w-full max-h-full object-contain"
-                      style={{ width: '96px', height: '96px', objectFit: 'contain' }}
+                      style={{ width: '92px', height: '92px', objectFit: 'contain' }}
                     />
                   </div>
                 </div>
 
-                {/* Center: CERTIFICATE Title with Golden Ornaments */}
-                <div className="text-center flex flex-col items-center justify-center">
-                  <div className="flex items-center justify-center w-full max-w-[180px] mb-1">
-                    <div className="h-[1.5px] bg-gradient-to-r from-transparent via-amber-600 to-transparent flex-1" />
-                    <span className="mx-1.5 text-amber-600 text-[10px] sm:text-xs">✤ ✦ ✤</span>
-                    <div className="h-[1.5px] bg-gradient-to-r from-transparent via-amber-600 to-transparent flex-1" />
-                  </div>
-                  <h2 className="text-2xl sm:text-4xl font-black text-black font-serif tracking-widest inline-block px-1">
+                {/* Center: CERTIFICATE Title with Golden Vector Ornaments */}
+                <div className="text-center flex flex-col items-center justify-center w-full px-1">
+                  {/* Top Ornamental Line (Pure Vector SVG for 100% PDF & HTML2Canvas stability) */}
+                  <svg
+                    className="w-full max-w-[280px] sm:max-w-[340px] h-3.5 sm:h-4 mx-auto block mb-1"
+                    viewBox="0 0 340 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <line x1="8" y1="8" x2="135" y2="8" stroke="#d97706" strokeWidth="1.8" strokeLinecap="round" />
+                    <g transform="translate(170, 8)">
+                      <polygon points="0,-6 6,0 0,6 -6,0" fill="#d97706" />
+                      <polygon points="-16,-4 -12,0 -16,4 -20,0" fill="#b45309" />
+                      <polygon points="16,-4 20,0 16,4 12,0" fill="#b45309" />
+                      <circle cx="-8" cy="0" r="1.5" fill="#d97706" />
+                      <circle cx="8" cy="0" r="1.5" fill="#d97706" />
+                    </g>
+                    <line x1="205" y1="8" x2="332" y2="8" stroke="#d97706" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+
+                  {/* Title with locked line-height and guaranteed vertical clearance */}
+                  <h2
+                    className="text-2xl sm:text-3.5xl md:text-4xl font-black text-black font-serif tracking-[0.16em] uppercase block w-full text-center"
+                    style={{
+                      lineHeight: '1.2',
+                      paddingTop: '3px',
+                      paddingBottom: '5px',
+                      margin: 0,
+                    }}
+                  >
                     CERTIFICATE
                   </h2>
-                  <div className="flex items-center justify-center w-full max-w-[180px] mt-1">
-                    <div className="h-[1.5px] bg-gradient-to-r from-transparent via-amber-600 to-transparent flex-1" />
-                    <span className="mx-1.5 text-amber-600 text-[10px] sm:text-xs">✤ ✦ ✤</span>
-                    <div className="h-[1.5px] bg-gradient-to-r from-transparent via-amber-600 to-transparent flex-1" />
-                  </div>
+
+                  {/* Bottom Ornamental Line (Pure Vector SVG - guaranteed to never overlap text) */}
+                  <svg
+                    className="w-full max-w-[280px] sm:max-w-[340px] h-3.5 sm:h-4 mx-auto block mt-1"
+                    viewBox="0 0 340 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <line x1="8" y1="8" x2="135" y2="8" stroke="#d97706" strokeWidth="1.8" strokeLinecap="round" />
+                    <g transform="translate(170, 8)">
+                      <polygon points="0,-6 6,0 0,6 -6,0" fill="#d97706" />
+                      <polygon points="-16,-4 -12,0 -16,4 -20,0" fill="#b45309" />
+                      <polygon points="16,-4 20,0 16,4 12,0" fill="#b45309" />
+                      <circle cx="-8" cy="0" r="1.5" fill="#d97706" />
+                      <circle cx="8" cy="0" r="1.5" fill="#d97706" />
+                    </g>
+                    <line x1="205" y1="8" x2="332" y2="8" stroke="#d97706" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
                 </div>
 
                 {/* Right: Student Photo Frame - FIXED PASSPORT DIMENSIONS & NO STRETCH */}
-                <div className="flex justify-end pr-2 print:block">
+                <div className="flex justify-end pr-1 sm:pr-2 print:block">
                   {currentPhoto ? (
                     <div className="relative group shrink-0" style={{ width: '96px', height: '112px' }}>
                       <img
@@ -830,9 +1172,9 @@ export function CertificateCard({
               </div>
 
               {/* Certification Body Text */}
-              <div className="space-y-2.5 sm:space-y-3 text-xs sm:text-sm text-slate-900 leading-relaxed font-sans my-2 z-10 px-3 sm:px-5">
+              <div className={`shrink-0 space-y-2.5 sm:space-y-3 text-xs sm:text-sm text-slate-900 leading-relaxed font-sans my-2 z-10 px-3 sm:px-5 ${useCompactCertificateBody ? 'certificate-body-compact' : ''}`}>
                 {/* 1. Student Certification Line */}
-                <p className="flex flex-wrap items-baseline gap-x-2">
+                <p className="flex flex-wrap items-baseline gap-x-2 min-w-0 break-words [overflow-wrap:anywhere]">
                   <span className="text-slate-900">This is to certify that</span>
                   <span className="font-bold text-blue-700 text-sm sm:text-base tracking-wide uppercase">
                     {studentName}
@@ -844,14 +1186,14 @@ export function CertificateCard({
                   <div className="grid grid-cols-[135px_16px_1fr] sm:grid-cols-[150px_20px_1fr] items-baseline">
                     <span className="text-slate-900 font-medium">Father's Name</span>
                     <span className="text-slate-900 font-bold">:</span>
-                    <span className="font-bold text-blue-700">{fatherName}</span>
+                    <span className="min-w-0 break-words font-bold text-blue-700 [overflow-wrap:anywhere]">{fatherName}</span>
                   </div>
 
                   {showMotherName && (
                     <div className="grid grid-cols-[135px_16px_1fr] sm:grid-cols-[150px_20px_1fr] items-baseline">
                       <span className="text-slate-900 font-medium">Mother's Name</span>
                       <span className="text-slate-900 font-bold">:</span>
-                      <span className="font-bold text-blue-700">{motherName}</span>
+                      <span className="min-w-0 break-words font-bold text-blue-700 [overflow-wrap:anywhere]">{motherName}</span>
                     </div>
                   )}
                 </div>
@@ -859,13 +1201,13 @@ export function CertificateCard({
                 {/* 3. Course Description Block */}
                 <div className="space-y-1 pt-1">
                   <p className="text-slate-900">has successfully completed the course in</p>
-                  <p className="text-sm sm:text-base font-extrabold text-blue-700 tracking-wide py-0.5">
+                  <p className="min-w-0 break-words text-sm sm:text-base font-extrabold text-blue-700 tracking-wide py-0.5 [overflow-wrap:anywhere]">
                     {course}
                   </p>
                   {showSubject && subject && (
                     <p className="text-xs sm:text-sm text-slate-900 font-medium py-0.5">
                       in the subject of{' '}
-                      <span className="font-bold text-blue-700">{subject}</span>
+                      <span className="min-w-0 break-words font-bold text-blue-700 [overflow-wrap:anywhere]">{subject}</span>
                     </p>
                   )}
                   <p className="text-xs sm:text-sm text-slate-900 leading-snug">
@@ -878,33 +1220,33 @@ export function CertificateCard({
                   <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
                     <span className="text-slate-900 font-medium">Course Completed</span>
                     <span className="text-slate-900 font-bold">:</span>
-                    <span className="font-bold text-blue-700">{course}</span>
+                    <span className="min-w-0 break-words font-bold text-blue-700 [overflow-wrap:anywhere]">{course}</span>
                   </div>
 
                   {showSubject && subject && (
                     <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
                       <span className="text-slate-900 font-medium">Subject / Stream</span>
                       <span className="text-slate-900 font-bold">:</span>
-                      <span className="font-bold text-blue-700">{subject}</span>
+                    <span className="min-w-0 break-words font-bold text-blue-700 [overflow-wrap:anywhere]">{subject}</span>
                     </div>
                   )}
 
                   <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
                     <span className="text-slate-900 font-medium">Academic Session</span>
                     <span className="text-slate-900 font-bold">:</span>
-                    <span className="font-bold text-blue-700 font-mono">{session}</span>
+                    <span className="min-w-0 break-words font-bold text-blue-700 font-mono [overflow-wrap:anywhere]">{session}</span>
                   </div>
 
                   <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
                     <span className="text-slate-900 font-medium">Percentage Obtained</span>
                     <span className="text-slate-900 font-bold">:</span>
-                    <span className="font-bold text-blue-700 font-mono">{marks}</span>
+                    <span className="min-w-0 break-words font-bold text-blue-700 font-mono [overflow-wrap:anywhere]">{marks}</span>
                   </div>
 
                   <div className="grid grid-cols-[160px_16px_1fr] sm:grid-cols-[180px_20px_1fr] items-baseline">
                     <span className="text-slate-900 font-medium">Grade Obtained</span>
                     <span className="text-slate-900 font-bold">:</span>
-                    <span className="font-bold text-blue-700">{grade}</span>
+                    <span className="min-w-0 break-words font-bold text-blue-700 [overflow-wrap:anywhere]">{grade}</span>
                   </div>
                 </div>
 
@@ -915,7 +1257,7 @@ export function CertificateCard({
               </div>
 
               {/* Signatures & Verification QR Code Row */}
-              <div className="flex items-end justify-between pt-5 pb-2 my-1 border-b border-slate-200 z-10 px-2">
+              <div className="flex shrink-0 items-end justify-between pt-5 pb-2 my-1 border-b border-slate-200 z-10 px-2">
                 <div className="text-left font-bold text-xs sm:text-sm text-black">
                   <div className="h-10 sm:h-12 flex items-end">
                     <div className="border-b border-slate-400 mb-1 w-32 sm:w-44" />
@@ -945,7 +1287,7 @@ export function CertificateCard({
               </div>
 
               {/* Accreditation Badges Row */}
-              <div className="grid grid-cols-4 items-center justify-items-center gap-2 sm:gap-4 py-2 my-1 border-t border-slate-200">
+              <div className="grid shrink-0 grid-cols-4 items-center justify-items-center gap-2 sm:gap-4 py-2 my-1 border-t border-slate-200">
                 {/* Badge 1: ISO 9001 */}
                 <div className="flex items-center justify-center">
                   <img
@@ -984,7 +1326,7 @@ export function CertificateCard({
               </div>
 
               {/* Office Address & Footer Info */}
-              <div className="pt-2 text-left space-y-0.5 text-[10px] sm:text-xs text-slate-900 font-sans border-t border-slate-300">
+              <div className="shrink-0 pt-2 text-left space-y-0.5 text-[10px] sm:text-xs text-slate-900 font-sans border-t border-slate-300">
                 <p className="font-bold">Office Address:</p>
                 <p>Azad Nagar Ward No-07, Transit Camp Rudrapur, Udham Singh Nagar, Uttarakhand-263153.</p>
                 <p>Website: <span className="font-semibold text-blue-800">www.successpointrdr.in</span> &nbsp;|&nbsp; Email: <span className="font-semibold text-slate-800">info.success.get@gmail.com</span></p>
@@ -995,9 +1337,11 @@ export function CertificateCard({
           /* Modern Golden Ornamental Landscape Template */
           <div
             ref={certRef}
-            className="w-full bg-white text-slate-900 border-[8px] border-amber-600/80 p-8 sm:p-12 shadow-2xl rounded-sm aspect-[1.414/1] flex flex-col justify-between overflow-hidden print:shadow-none print:border-[8px]"
+            className="printable-certificate relative box-border w-full max-w-[297mm] bg-white text-slate-900 border-[8px] border-amber-600/80 p-8 sm:p-12 shadow-2xl rounded-sm aspect-[297/210] flex flex-col justify-between overflow-hidden print:shadow-none print:border-[8px]"
             style={{
               backgroundImage: `radial-gradient(circle at center, rgba(245, 158, 11, 0.03) 0%, transparent 70%)`,
+              aspectRatio: '297 / 210',
+              boxSizing: 'border-box',
             }}
           >
             {/* Decorative Corner Borders */}
@@ -1037,7 +1381,10 @@ export function CertificateCard({
             {/* Student & Course Info */}
             <div className="text-center my-4 space-y-4 relative z-10">
               <div className="relative inline-block">
-                <h2 className="text-2xl sm:text-4xl font-bold text-slate-900 font-serif border-b-2 border-amber-600/40 pb-1 px-8">
+                <h2
+                  className="landscape-student-name max-w-full break-words text-2xl sm:text-4xl font-bold text-slate-900 font-serif border-b-2 border-amber-600/40 pb-1 px-8 [overflow-wrap:anywhere]"
+                  style={{ '--student-name-scale': Math.min(1, 48 / Math.max(studentName.length, 1)) } as React.CSSProperties}
+                >
                   {studentName}
                 </h2>
               </div>
@@ -1053,19 +1400,22 @@ export function CertificateCard({
               </p>
 
               <div className="py-2">
-                <p className="text-xl sm:text-2xl font-bold text-amber-800 font-serif tracking-wide">
+                  <p className="max-w-full break-words text-xl sm:text-2xl font-bold text-amber-800 font-serif tracking-wide [overflow-wrap:anywhere]">
                   {course}
                 </p>
                 {showSubject && subject && (
-                  <p className="text-xs sm:text-sm font-semibold text-amber-900 mt-1">
+                  <p className="max-w-full break-words text-xs sm:text-sm font-semibold text-amber-900 mt-1 [overflow-wrap:anywhere]">
                     in the subject of: <span className="font-bold text-amber-950 underline decoration-amber-400">{subject}</span>
                   </p>
                 )}
                 <p className="text-xs text-slate-600 font-medium mt-1">
                   at <span className="font-semibold text-slate-800">SUCCESS POINT COMPUTER INSTITUTE</span>, Rudrapur, Udham Singh Nagar, Uttarakhand
                 </p>
-                <p className="text-xs text-slate-500 font-medium mt-1.5">
-                  Academic Session: <span className="font-semibold font-mono text-slate-700">{session}</span> &nbsp;|&nbsp; Percentage Obtained: <span className="font-semibold font-mono text-slate-700">{marks}</span> &nbsp;|&nbsp; Grade Obtained: <span className="font-semibold text-slate-700">{grade}</span>
+                <p className="text-xs text-slate-500 font-medium mt-1.5 flex items-center justify-center flex-wrap gap-1">
+                  <span>Academic Session: <span className="font-semibold font-mono text-slate-700">{session}</span></span>
+                  <span>&nbsp;|&nbsp; Percentage Obtained: <span className="font-semibold font-mono text-slate-700">{marks}</span></span>
+
+                  <span>&nbsp;|&nbsp; Grade Obtained: <span className="font-semibold text-slate-700">{grade}</span></span>
                 </p>
               </div>
             </div>

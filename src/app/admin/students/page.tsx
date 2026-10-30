@@ -12,7 +12,7 @@ import {
   deleteStudent,
 } from '@/lib/supabase/student-service';
 import { StudentRecord, UserProfile } from '@/lib/types/portal';
-import { INSTITUTE_COURSES, COURSE_SUBJECT_PRESETS } from '@/components/portal/certificate-card';
+import { INSTITUTE_COURSES, COURSE_SUBJECT_PRESETS, calculateGradeFromMarks } from '@/components/portal/certificate-card';
 import {
   Search,
   Filter,
@@ -27,6 +27,7 @@ import {
   ExternalLink,
   Download,
   Loader2,
+  Percent,
 } from 'lucide-react';
 
 export default function AdminStudentsPage() {
@@ -64,6 +65,8 @@ export default function AdminStudentsPage() {
     mobile_no: '',
     course_status: 'pending' as 'pending' | 'completed',
     certificate_url: '',
+    marks: '85%',
+    grade: 'A',
   });
 
   const [notification, setNotification] = useState('');
@@ -137,6 +140,8 @@ export default function AdminStudentsPage() {
         mobile_no: '',
         course_status: 'pending',
         certificate_url: '',
+        marks: '85%',
+        grade: 'A',
       });
       setAddCertFile(null);
       setAddPhotoFile(null);
@@ -295,6 +300,7 @@ export default function AdminStudentsPage() {
                   <th className="px-4 py-3.5">Start Date</th>
                   <th className="px-4 py-3.5">End Date</th>
                   <th className="px-4 py-3.5">Course Status</th>
+                  <th className="px-4 py-3.5">Percentage / Grade</th>
                   <th className="px-4 py-3.5">Certificate URL / File</th>
                   <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>
@@ -302,7 +308,7 @@ export default function AdminStudentsPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={11} className="text-center py-12 text-slate-400">
+                    <td colSpan={12} className="text-center py-12 text-slate-400">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="w-5 h-5 animate-spin text-amber-600" />
                         <span>Loading student records...</span>
@@ -363,6 +369,10 @@ export default function AdminStudentsPage() {
                             <option value="completed">✅ Completed</option>
                           </select>
                         </td>
+                        <td className="px-4 py-3.5 font-mono text-slate-700 dark:text-slate-200">
+                          <span className="font-bold text-blue-600 dark:text-blue-400">{student.marks || '85%'}</span>
+                          <span className="text-[11px] text-slate-400 ml-1">({student.grade || 'A'})</span>
+                        </td>
                         <td className="px-4 py-3.5">
                           {certUrl ? (
                             <a
@@ -416,7 +426,7 @@ export default function AdminStudentsPage() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={7} className="text-center py-10 text-slate-400">
+                    <td colSpan={12} className="text-center py-10 text-slate-400">
                       No student records found matching your filters.
                     </td>
                   </tr>
@@ -591,6 +601,37 @@ export default function AdminStudentsPage() {
                 />
               </div>
 
+              {/* Percentage & Grade Fields in Add Modal */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-500 font-semibold mb-1">Percentage Obtained</label>
+                  <input
+                    type="text"
+                    value={newStudent.marks}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewStudent({
+                        ...newStudent,
+                        marks: val,
+                        grade: calculateGradeFromMarks(val),
+                      });
+                    }}
+                    placeholder="e.g. 85%"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 font-semibold mb-1">Grade Obtained</label>
+                  <input
+                    type="text"
+                    value={newStudent.grade}
+                    onChange={(e) => setNewStudent({ ...newStudent, grade: e.target.value })}
+                    placeholder="e.g. A"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                  />
+                </div>
+              </div>
+
               {/* Student Photo Upload */}
               <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
                 <label className="block text-slate-500 font-semibold">
@@ -707,7 +748,7 @@ export default function AdminStudentsPage() {
                   <input
                     type="text"
                     required
-                    value={editingStudent.father_name}
+                    value={editingStudent.father_name || ''}
                     onChange={(e) =>
                       setEditingStudent({ ...editingStudent, father_name: e.target.value })
                     }
@@ -773,7 +814,7 @@ export default function AdminStudentsPage() {
                     type="text"
                     required
                     list="institute-courses-edit-list"
-                    value={editingStudent.course}
+                    value={editingStudent.course || ''}
                     onChange={(e) =>
                       setEditingStudent({ ...editingStudent, course: e.target.value })
                     }
@@ -790,7 +831,7 @@ export default function AdminStudentsPage() {
                   <input
                     type="text"
                     required
-                    value={editingStudent.session}
+                    value={editingStudent.session || ''}
                     onChange={(e) =>
                       setEditingStudent({ ...editingStudent, session: e.target.value })
                     }
@@ -829,6 +870,37 @@ export default function AdminStudentsPage() {
                   placeholder="e.g. Computer Fundamentals, Operating Systems & MS Office"
                   className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
                 />
+              </div>
+
+              {/* Percentage & Grade Fields in Edit Modal */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-500 font-semibold mb-1">Percentage Obtained</label>
+                  <input
+                    type="text"
+                    value={editingStudent.marks || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditingStudent({
+                        ...editingStudent,
+                        marks: val,
+                        grade: calculateGradeFromMarks(val),
+                      });
+                    }}
+                    placeholder="e.g. 85%"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 font-semibold mb-1">Grade Obtained</label>
+                  <input
+                    type="text"
+                    value={editingStudent.grade || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, grade: e.target.value })}
+                    placeholder="e.g. A"
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                  />
+                </div>
               </div>
 
               {/* Student Photo Upload */}

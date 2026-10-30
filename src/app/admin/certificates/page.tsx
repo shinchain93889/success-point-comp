@@ -89,6 +89,7 @@ export default function AdminCertificatesPage() {
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs space-y-1 text-slate-600 dark:text-slate-400">
                   <p><span className="font-semibold text-slate-500">Course:</span> {student.course}</p>
                   <p><span className="font-semibold text-slate-500">Session:</span> {student.session}</p>
+                  <p><span className="font-semibold text-slate-500">Percentage:</span> <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{student.marks || '85%'}</span> <span className="text-slate-400">({student.grade || 'A'})</span></p>
                   <p><span className="font-semibold text-slate-500">Issue Date:</span> {student.issue_date}</p>
                 </div>
               </div>

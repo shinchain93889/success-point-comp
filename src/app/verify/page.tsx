@@ -19,6 +19,7 @@ import {
   Loader2,
   Printer,
   Phone,
+  Percent,
 } from 'lucide-react';
 import { fetchStudentByRollNo } from '@/lib/supabase/student-service';
 import { StudentRecord } from '@/lib/types/portal';
@@ -58,8 +59,10 @@ function VerificationContent() {
         setError(`No genuine certificate record found for Roll Number "${clean}". Please verify your roll number.`);
       }
     } catch (err) {
-      console.error('Search error:', err);
-      setError('An error occurred while verifying the record. Please try again.');
+      setStudent(null);
+      setError(err instanceof Error && err.message.includes('temporarily unavailable')
+        ? err.message
+        : 'Certificate verification is currently unavailable. Please try again shortly.');
     } finally {
       setIsLoading(false);
     }
@@ -256,6 +259,15 @@ function VerificationContent() {
                       <Calendar className="w-3.5 h-3.5 text-amber-400" /> Academic Session
                     </p>
                     <p className="text-sm font-semibold text-white">{student.session}</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                      <Percent className="w-3.5 h-3.5 text-amber-400" /> Percentage & Grade
+                    </p>
+                    <p className="text-sm font-semibold text-emerald-400 font-mono">
+                      {student.marks || '85%'} <span className="text-slate-400 text-xs font-sans font-normal">(Grade {student.grade || 'A'})</span>
+                    </p>
                   </div>
                 </div>
 

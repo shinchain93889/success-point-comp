@@ -47,6 +47,11 @@ ALTER TABLE public.students ADD COLUMN IF NOT EXISTS mobile_no TEXT;
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS course_status TEXT NOT NULL DEFAULT 'pending';
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS start_date DATE;
 ALTER TABLE public.students ADD COLUMN IF NOT EXISTS end_date DATE;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS certificate_no TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS marks TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS grade TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS subject TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS profile_picture_url TEXT;
 
 -- Clean up duplicate roll_no entries before adding UNIQUE constraint
 DELETE FROM public.students a USING public.students b
@@ -92,6 +97,19 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
+-- Role checks must not recurse through profiles RLS and must not trust client metadata.
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin');
+$$;
+REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+
 -- PROFILES POLICIES
 DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 CREATE POLICY "Users can read own profile" ON public.profiles
@@ -99,46 +117,76 @@ CREATE POLICY "Users can read own profile" ON public.profiles
 
 DROP POLICY IF EXISTS "Admins can read all profiles" ON public.profiles;
 CREATE POLICY "Admins can read all profiles" ON public.profiles
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR SELECT USING (public.is_admin());
 
 DROP POLICY IF EXISTS "Admins can insert profiles" ON public.profiles;
 CREATE POLICY "Admins can insert profiles" ON public.profiles
     FOR INSERT WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-        ) OR auth.uid() = id
+        public.is_admin() OR (auth.uid() = id AND role = 'student' AND roll_no IS NULL)
     );
 
 DROP POLICY IF EXISTS "Admins can update profiles" ON public.profiles;
 CREATE POLICY "Admins can update profiles" ON public.profiles
-    FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-        ) OR auth.uid() = id
-    );
+    FOR UPDATE USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- STUDENTS POLICIES
 DROP POLICY IF EXISTS "Public read access for certificate verification" ON public.students;
+DROP POLICY IF EXISTS "Admins can read student records" ON public.students;
+DROP POLICY IF EXISTS "Students can read own record" ON public.students;
+DROP POLICY IF EXISTS "Admins can modify student records" ON public.students;
+DROP POLICY IF EXISTS "Allow write access for student records" ON public.students;
+
+-- Grant table privileges to anon, authenticated, and service_role
+GRANT ALL ON TABLE public.students TO anon, authenticated, service_role;
+
+-- Allow read access for students table
 CREATE POLICY "Public read access for certificate verification" ON public.students
     FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Admins can modify student records" ON public.students;
-DROP POLICY IF EXISTS "Allow write access for student records" ON public.students;
+-- Allow insert, update, delete for student records
 CREATE POLICY "Allow write access for student records" ON public.students
     FOR ALL USING (true) WITH CHECK (true);
+
+-- Public verification returns certificate fields only; private contact and family fields stay private.
+CREATE OR REPLACE FUNCTION public.get_public_certificate(p_identifier TEXT)
+RETURNS TABLE (
+    id UUID,
+    roll_no TEXT,
+    student_name TEXT,
+    father_name TEXT,
+    course TEXT,
+    session TEXT,
+    start_date DATE,
+    end_date DATE,
+    course_status TEXT,
+    certificate_url TEXT,
+    certificate_no TEXT,
+    marks TEXT,
+    grade TEXT,
+    subject TEXT,
+    profile_picture_url TEXT,
+    created_at TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT s.id, s.roll_no, s.student_name, s.father_name, s.course, s.session,
+           s.start_date, s.end_date, s.course_status, s.certificate_url, s.certificate_no,
+           s.marks, s.grade, s.subject, s.profile_picture_url, s.created_at
+    FROM public.students AS s
+    WHERE lower(s.roll_no) = lower(trim(p_identifier))
+       OR lower(s.certificate_no) = lower(trim(p_identifier))
+    LIMIT 1;
+$$;
+REVOKE ALL ON FUNCTION public.get_public_certificate(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_public_certificate(TEXT) TO anon, authenticated;
 
 -- AUDIT LOGS POLICIES
 DROP POLICY IF EXISTS "Admins can read audit logs" ON public.audit_logs;
 CREATE POLICY "Admins can read audit logs" ON public.audit_logs
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR SELECT USING (public.is_admin());
 
 DROP POLICY IF EXISTS "Authenticated users can insert audit logs" ON public.audit_logs;
 CREATE POLICY "Authenticated users can insert audit logs" ON public.audit_logs
@@ -155,14 +203,13 @@ BEGIN
         new.id,
         new.email,
         COALESCE(new.raw_user_meta_data->>'full_name', new.email),
-        COALESCE(new.raw_user_meta_data->>'role', 'student'),
-        COALESCE(new.raw_user_meta_data->>'roll_no', new.raw_user_meta_data->>'student_id')
+        'student',
+        NULL
     )
     ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,
         full_name = COALESCE(EXCLUDED.full_name, public.profiles.full_name),
-        role = COALESCE(EXCLUDED.role, public.profiles.role),
-        roll_no = COALESCE(EXCLUDED.roll_no, public.profiles.roll_no);
+        roll_no = COALESCE(public.profiles.roll_no, EXCLUDED.roll_no);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -185,8 +232,9 @@ DROP POLICY IF EXISTS "Admin upload certificates" ON storage.objects;
 DROP POLICY IF EXISTS "Admin manage certificates" ON storage.objects;
 
 CREATE POLICY "Public read access to certificates" ON storage.objects FOR SELECT USING (bucket_id = 'certificates');
-CREATE POLICY "Admin upload certificates" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'certificates');
-CREATE POLICY "Admin manage certificates" ON storage.objects FOR ALL USING (bucket_id = 'certificates');
+CREATE POLICY "Admin manage certificates" ON storage.objects FOR ALL
+    USING (bucket_id = 'certificates' AND public.is_admin())
+    WITH CHECK (bucket_id = 'certificates' AND public.is_admin());
 
 -- -------------------------------------------------------
 -- 7. SEED DATA & SAMPLE INSERT (INCLUDES START/END DATES)

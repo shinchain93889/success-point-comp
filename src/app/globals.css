@@ -60,10 +60,52 @@
   }
 }
 
+.certificate-body-compact {
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+}
+
+.certificate-body-compact .text-xs {
+  font-size: 10px !important;
+}
+
+.certificate-body-compact .text-sm {
+  font-size: 12px !important;
+}
+
+.certificate-body-compact .text-base {
+  font-size: 13px !important;
+}
+
+.certificate-body-compact [class~="space-y-2.5"] > :not([hidden]) ~ :not([hidden]),
+.certificate-body-compact [class~="space-y-3"] > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.35rem !important;
+}
+
+.certificate-body-compact [class~="space-y-1.5"] > :not([hidden]) ~ :not([hidden]),
+.certificate-body-compact [class~="space-y-1"] > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.25rem !important;
+}
+
+.landscape-student-name {
+  font-size: calc(2.25rem * var(--student-name-scale, 1)) !important;
+  line-height: 1.15 !important;
+}
+
+@media (max-width: 639px) {
+  .landscape-student-name {
+    font-size: calc(1.5rem * var(--student-name-scale, 1)) !important;
+  }
+}
+
 @media print {
   @page {
     size: A4 portrait;
-    margin: 6mm;
+    margin: 0;
+  }
+  @page landscape {
+    size: A4 landscape;
+    margin: 0;
   }
   html, body {
     background: #ffffff !important;
@@ -81,18 +123,35 @@
     margin: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
-    width: 100% !important;
+    width: 210mm !important;
+    height: 297mm !important;
     display: flex !important;
     justify-content: center !important;
+    align-items: center !important;
+    overflow: hidden !important;
+    page: auto;
+  }
+  .printable-certificate-wrapper.print-landscape {
+    page: landscape;
+    width: 297mm !important;
+    height: 210mm !important;
   }
   .printable-certificate {
     box-shadow: none !important;
     border-radius: 0 !important;
-    width: 100% !important;
-    max-width: 196mm !important;
+    width: 210mm !important;
+    height: auto !important;
+    max-width: none !important;
     margin: 0 auto !important;
+    aspect-ratio: 210 / 297 !important;
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
     box-sizing: border-box !important;
+  }
+  .print-landscape .printable-certificate {
+    width: 297mm !important;
+    height: 210mm !important;
+    aspect-ratio: 297 / 210 !important;
   }
   img {
     print-color-adjust: exact !important;

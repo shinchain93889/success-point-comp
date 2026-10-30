@@ -69,4 +69,6 @@ export interface BulkUploadRow {
   certificate_no: string;
   issue_date: string;
   phone?: string;
+  marks?: string;
+  grade?: string;
 }

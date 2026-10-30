@@ -14,13 +14,23 @@ export default function VerifyCertificatePage() {
   const certNo = params?.certificateNo as string;
   const [student, setStudent] = useState<StudentRecord | null>(null);
   const [searched, setSearched] = useState(false);
+  const [lookupError, setLookupError] = useState('');
 
   useEffect(() => {
     if (certNo) {
-      fetchStudentByRollNo(certNo).then((res) => {
-        setStudent(res);
-        setSearched(true);
-      });
+      let active = true;
+      fetchStudentByRollNo(certNo)
+        .then((res) => {
+          if (!active) return;
+          setStudent(res);
+          setSearched(true);
+        })
+        .catch(() => {
+          if (!active) return;
+          setLookupError('Certificate verification is currently unavailable. Please try again shortly.');
+          setSearched(true);
+        });
+      return () => { active = false; };
     }
   }, [certNo]);
 
@@ -89,10 +99,10 @@ export default function VerifyCertificatePage() {
             <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto">
               <XCircle className="w-8 h-8" />
             </div>
-            <h2 className="text-xl font-bold text-white font-serif">Certificate Not Found</h2>
+            <h2 className="text-xl font-bold text-white font-serif">{lookupError ? 'Verification Unavailable' : 'Certificate Not Found'}</h2>
             <p className="text-xs text-slate-300 leading-relaxed">
-              No genuine certificate record was found matching certificate number{' '}
-              <span className="font-mono font-bold text-rose-300">{certNo}</span>. Please verify the certificate number or contact the institute director.
+              {lookupError || <>No genuine certificate record was found matching certificate number{' '}
+              <span className="font-mono font-bold text-rose-300">{certNo}</span>. Please verify the certificate number or contact the institute director.</>}
             </p>
             <div className="pt-2">
               <Link

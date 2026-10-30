@@ -163,6 +163,10 @@ export function getStoredStudents(): StudentRecord[] {
       return INITIAL_MOCK_STUDENTS;
     }
     const parsed: StudentRecord[] = JSON.parse(data);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_MOCK_STUDENTS));
+      return INITIAL_MOCK_STUDENTS;
+    }
     let changed = false;
     const hasPriyanka = parsed.some((s) => s.roll_no === '320');
     if (!hasPriyanka) {
@@ -193,18 +197,25 @@ export function getStoredStudents(): StudentRecord[] {
 
 export function saveStoredStudents(students: StudentRecord[]) {
   if (typeof window === 'undefined') return;
+  if (!Array.isArray(students) || students.length === 0) return;
   localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(students));
 }
 
 export function addStoredStudent(studentData: any): StudentRecord {
   const students = getStoredStudents();
-  const rollNo = studentData.roll_no || studentData.roll_number || studentData.student_id || '10100';
+  const rollNo = (studentData.roll_no || studentData.roll_number || studentData.student_id || '10100').toString().trim();
   const name = studentData.student_name || studentData.name || 'Student';
   const certNo = studentData.certificate_no || `SP-2024-${rollNo}`;
 
+  const existingIndex = students.findIndex(
+    (s) =>
+      (s.roll_no && s.roll_no.toLowerCase() === rollNo.toLowerCase()) ||
+      (s.id && studentData.id && s.id === studentData.id)
+  );
+
   const newStudent: StudentRecord = {
     ...studentData,
-    id: generateUUID(),
+    id: studentData.id || (existingIndex >= 0 ? students[existingIndex].id : generateUUID()),
     roll_no: rollNo,
     student_name: name,
     father_name: studentData.father_name || '',
@@ -216,7 +227,7 @@ export function addStoredStudent(studentData: any): StudentRecord {
     mobile_no: studentData.mobile_no || studentData.phone || '',
     course_status: studentData.course_status || 'pending',
     certificate_url: studentData.certificate_url || studentData.pdf_url || null,
-    created_at: new Date().toISOString(),
+    created_at: studentData.created_at || new Date().toISOString(),
     roll_number: rollNo,
     student_id: studentData.student_id || rollNo,
     name: name,
@@ -225,7 +236,14 @@ export function addStoredStudent(studentData: any): StudentRecord {
     phone: studentData.mobile_no || studentData.phone || '',
   };
 
-  const updated = [newStudent, ...students];
+  let updated: StudentRecord[];
+  if (existingIndex >= 0) {
+    updated = [...students];
+    updated[existingIndex] = { ...updated[existingIndex], ...newStudent };
+  } else {
+    updated = [newStudent, ...students];
+  }
+
   saveStoredStudents(updated);
   addAuditLog('CREATE_STUDENT', 'student', newStudent.roll_no, {
     name: newStudent.student_name,

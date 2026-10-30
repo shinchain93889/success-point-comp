@@ -6,7 +6,7 @@ import { PortalNav } from '@/components/portal/portal-nav';
 import { getCurrentPortalUser, addAuditLog } from '@/lib/supabase/mock-data';
 import { createStudent, uploadCertificateFile } from '@/lib/supabase/student-service';
 import { UserProfile, BulkUploadRow } from '@/lib/types/portal';
-import { INSTITUTE_COURSES, COURSE_SUBJECT_PRESETS } from '@/components/portal/certificate-card';
+import { INSTITUTE_COURSES, COURSE_SUBJECT_PRESETS, calculateGradeFromMarks } from '@/components/portal/certificate-card';
 import Papa from 'papaparse';
 import {
   FileSpreadsheet,
@@ -47,6 +47,8 @@ function AdminUploadPageContent() {
     mobile_no: '',
     course_status: 'pending' as 'pending' | 'completed',
     certificate_url: '',
+    marks: '85%',
+    grade: 'A',
   });
   const [singleCertFile, setSingleCertFile] = useState<File | null>(null);
   const [singlePhotoFile, setSinglePhotoFile] = useState<File | null>(null);
@@ -99,6 +101,8 @@ function AdminUploadPageContent() {
             certificate_no: row.certificate_no || row['Certificate No'] || row['certNo'] || `SP-2024-${rollNo}`,
             issue_date: row.issue_date || row['Issue Date'] || new Date().toISOString().split('T')[0],
             phone: mobile,
+            marks: row.marks || row['Percentage'] || row['Marks'] || '85%',
+            grade: row.grade || row['Grade'] || calculateGradeFromMarks(row.marks || row['Percentage'] || row['Marks']),
           };
         });
 
@@ -130,6 +134,8 @@ function AdminUploadPageContent() {
           end_date: row.end_date,
           mobile_no: row.mobile_no,
           course_status: row.course_status || 'pending',
+          marks: row.marks || '85%',
+          grade: row.grade || 'A',
         });
         count++;
       }
@@ -169,6 +175,8 @@ function AdminUploadPageContent() {
         mobile_no: '',
         course_status: 'pending',
         certificate_url: '',
+        marks: '85%',
+        grade: 'A',
       });
       setSingleCertFile(null);
       setSinglePhotoFile(null);
@@ -215,11 +223,10 @@ function AdminUploadPageContent() {
         <div className="flex border-b border-slate-200 dark:border-slate-800 text-sm font-semibold">
           <button
             onClick={() => setActiveTab('bulk')}
-            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'bulk'
+            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all ${activeTab === 'bulk'
                 ? 'border-amber-600 text-amber-600'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
+              }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
             Bulk CSV/Excel Import
@@ -227,11 +234,10 @@ function AdminUploadPageContent() {
 
           <button
             onClick={() => setActiveTab('single')}
-            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'single'
+            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all ${activeTab === 'single'
                 ? 'border-amber-600 text-amber-600'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
+              }`}
           >
             <UserPlus className="w-4 h-4" />
             Single Student Entry
@@ -479,6 +485,35 @@ function AdminUploadPageContent() {
                     value={singleStudent.end_date}
                     onChange={(e) => setSingleStudent({ ...singleStudent, end_date: e.target.value })}
                     className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Percentage Obtained</label>
+                  <input
+                    type="text"
+                    value={singleStudent.marks}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSingleStudent({
+                        ...singleStudent,
+                        marks: val,
+                        grade: calculateGradeFromMarks(val),
+                      });
+                    }}
+                    placeholder="e.g. 85%"
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Grade Obtained</label>
+                  <input
+                    type="text"
+                    value={singleStudent.grade}
+                    onChange={(e) => setSingleStudent({ ...singleStudent, grade: e.target.value })}
+                    placeholder="e.g. A"
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl font-bold"
                   />
                 </div>
 

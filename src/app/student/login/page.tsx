@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signInStudent } from '@/lib/supabase/auth-service';
 import { getCurrentPortalUser } from '@/lib/supabase/mock-data';
-import { Award, UserCheck, Calendar, Lock, ArrowRight, ShieldAlert, CheckCircle2, ShieldCheck, Mail } from 'lucide-react';
+import { Award, UserCheck, Lock, ArrowRight, ShieldAlert, CheckCircle2, ShieldCheck, Mail } from 'lucide-react';
 
 export default function StudentLoginPage() {
   const router = useRouter();
   const [rollNo, setRollNo] = useState('');
-  const [dobOrPassword, setDobOrPassword] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,11 +32,11 @@ export default function StudentLoginPage() {
     setIsLoading(true);
 
     try {
-      await signInStudent({ roll_no: rollNo, dob_or_password: dobOrPassword });
+      await signInStudent({ roll_no: rollNo, dob_or_password: password });
       router.push('/student/dashboard');
     } catch (err: any) {
       console.warn('Student login failed:', err?.message || err);
-      setError(err?.message || 'Invalid Roll Number or Date of Birth/Password.');
+      setError(err?.message || 'Invalid Roll Number or Password.');
       setIsLoading(false);
     }
   };
@@ -61,7 +61,7 @@ export default function StudentLoginPage() {
           Student Credential Access
         </h2>
         <p className="text-xs text-slate-400 max-w-sm mx-auto">
-          Log in with your assigned Roll Number and Date of Birth to view and download your official certificate.
+          Log in with the Roll Number and password assigned to your student account.
         </p>
       </div>
 
@@ -96,18 +96,18 @@ export default function StudentLoginPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                Date of Birth (YYYY-MM-DD) or Password *
+                Password *
               </label>
               <div className="relative rounded-2xl shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                  <Calendar className="w-4 h-4" />
+                  <Lock className="w-4 h-4" />
                 </div>
                 <input
-                  type="text"
+                  type="password"
                   required
-                  value={dobOrPassword}
-                  onChange={(e) => setDobOrPassword(e.target.value)}
-                  placeholder="e.g. 2000-01-15 or password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
                   className="block w-full pl-10 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                 />
               </div>

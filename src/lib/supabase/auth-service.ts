@@ -9,6 +9,7 @@ function requireSupabaseAuth() {
   return createClient();
 }
 
+<<<<<<< HEAD
 function getAuthFailureMessage(error: { message?: string; name?: string }, portal: 'admin' | 'student') {
   const message = error.message || '';
   if (/failed to fetch|fetch failed|network|timeout/i.test(message) || error.name === 'TypeError') {
@@ -20,6 +21,28 @@ function getAuthFailureMessage(error: { message?: string; name?: string }, porta
       : 'Invalid roll number or password. Check that your student account is created in Supabase Auth.';
   }
   return message || `Could not sign in to the ${portal} portal.`;
+=======
+// -------------------------------------------------------
+// ADMIN CREDENTIALS FROM ENVIRONMENT (.env / .env.local)
+// -------------------------------------------------------
+export function getAdminCredentials() {
+  const rawEmail =
+    process.env.PUBLIC_ADMIN_EMAIL ||
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
+    process.env.ADMIN_EMAIL ||
+    'admin@gmail.com';
+
+  const rawPassword =
+    process.env.PUBLIC_ADMIN_PASSWORD ||
+    process.env.NEXT_PUBLIC_ADMIN_PASSWORD ||
+    process.env.ADMIN_PASSWORD ||
+    'admin';
+
+  const email = rawEmail.replace(/^["']|["']$/g, '').trim().toLowerCase();
+  const password = rawPassword.replace(/^["']|["']$/g, '').trim();
+
+  return { email, password };
+>>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
 }
 
 export async function signInAdmin({ email, password }: { email: string; password: string }): Promise<UserProfile> {

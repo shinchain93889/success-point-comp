@@ -403,8 +403,37 @@ export async function createStudent(
       } else if (insertRes.error) {
         const errDetail = insertRes.error.message || insertRes.error.details || JSON.stringify(insertRes.error);
 
+<<<<<<< HEAD
         if (insertRes.error.code === '23505') {
           throw new Error(`Student record with Roll No '${rollNo}' already exists.`);
+=======
+        const isNetworkError =
+          errDetail.toLowerCase().includes('failed to fetch') ||
+          errDetail.toLowerCase().includes('fetch failed') ||
+          errDetail.toLowerCase().includes('networkerror') ||
+          errDetail.toLowerCase().includes('enotfound') ||
+          errDetail.toLowerCase().includes('typeerror');
+
+        if (isNetworkError) {
+          console.warn('Supabase request failed due to network issue, falling back to local storage:', errDetail);
+          // Fall through to local storage below
+        } else {
+          console.error('Supabase insert/upsert error details:', errDetail);
+
+          if (insertRes.error.code === '23505') {
+            throw new Error(`Student record with Roll No '${rollNo}' already exists.`);
+          } else if (
+            insertRes.error.code === '42501' ||
+            errDetail.toLowerCase().includes('row-level security') ||
+            errDetail.toLowerCase().includes('permission denied')
+          ) {
+            throw new Error(
+              `Supabase Permission Error: Database is blocking insert on table 'students' (${errDetail}). Please execute the updated supabase/schema.sql in your Supabase SQL Editor to grant table & storage permissions.`
+            );
+          } else {
+            throw new Error(`Supabase Error (${insertRes.error.code || 'UNKNOWN'}): ${errDetail}`);
+          }
+>>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
         }
 
         if (insertRes.error.code === '42501') {
@@ -647,7 +676,37 @@ export async function updateStudent(
 
   if (isSupabaseConfigured() && !supabaseUpdatedRecord) {
     const errMsg = lastError?.message || (typeof lastError === 'string' ? lastError : '');
+<<<<<<< HEAD
     console.warn('Supabase update notice (updated locally):', errMsg);
+=======
+    const isNetworkError =
+      !lastError ||
+      errMsg.toLowerCase().includes('failed to fetch') ||
+      errMsg.toLowerCase().includes('fetch failed') ||
+      errMsg.toLowerCase().includes('networkerror') ||
+      errMsg.toLowerCase().includes('enotfound') ||
+      lastError?.name === 'TypeError';
+
+    if (!isNetworkError) {
+      const isRlsError =
+        errMsg.toLowerCase().includes('row-level security') ||
+        errMsg.toLowerCase().includes('violates') ||
+        errMsg.toLowerCase().includes('permission denied') ||
+        lastError?.code === '42501';
+
+      if (isRlsError) {
+        throw new Error(
+          'Supabase Permission Error: Database is blocking updates on table "students". Please execute the updated supabase/schema.sql in your Supabase SQL Editor.'
+        );
+      }
+
+      throw new Error(
+        errMsg || `Failed to update or create student record for Roll No '${rollNo || id}' in Supabase database.`
+      );
+    } else {
+      console.warn('Supabase update failed due to network issue, falling back to local storage:', errMsg);
+    }
+>>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
   }
 
   return updatedLocal ? normalizeStudentRow(updatedLocal) : supabaseUpdatedRecord;

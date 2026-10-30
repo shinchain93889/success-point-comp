@@ -6,9 +6,18 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+<<<<<<< HEAD
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder-project.supabase.co';
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+=======
+  const supabaseUrl =
+    process.env.PUBLIC_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    'https://placeholder-project.supabase.co';
+  const supabaseAnonKey =
+    process.env.PUBLIC_SUPABASE_ANON_KEY ||
+>>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     'placeholder-anon-key';
 

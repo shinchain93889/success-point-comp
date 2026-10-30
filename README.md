@@ -1,4 +1,4 @@
-# Success Point Hub
+# Success Point Hub  
 
 A modern, responsive website for Success Point Computer - a comprehensive computer training and repair service provider. Built with Next.js, TypeScript, and Tailwind CSS, featuring AI-powered FAQ assistance.
 

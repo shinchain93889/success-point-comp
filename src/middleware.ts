@@ -7,7 +7,22 @@ export async function middleware(request: NextRequest) {
   // 1. Refresh Supabase session cookies
   const { supabaseResponse, supabase, user } = await updateSession(request);
 
+<<<<<<< HEAD
   // Only a role stored in the authenticated user's profile is authoritative.
+=======
+  // Determine configured admin email
+  const envAdminEmail = (
+    process.env.PUBLIC_ADMIN_EMAIL ||
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
+    process.env.ADMIN_EMAIL ||
+    'admin@gmail.com'
+  ).toLowerCase().trim();
+
+  // Check fallback client cookie for demo/localStorage session sync
+  const clientUserCookie = request.cookies.get('sp_portal_user_role')?.value;
+
+  // 2. Fetch user profile role if authenticated
+>>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
   let userRole: 'admin' | 'student' | null = null;
 
   if (user) {

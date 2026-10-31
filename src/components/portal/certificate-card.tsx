@@ -193,7 +193,7 @@ export function CertificateCard({
     }
   }, []);
 
-  const isAdmin = isAdminProp !== undefined ? isAdminProp : (currentUserRole === 'admin' || showActions);
+  const isAdmin = isAdminProp !== undefined ? isAdminProp : (currentUserRole === 'admin');
 
   const [currentPhoto, setCurrentPhoto] = useState<string | null>(
     student.profile_picture_url || student.photo_url || student.student_image || null

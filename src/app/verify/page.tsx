@@ -320,31 +320,19 @@ function VerificationContent() {
 export default function VerifyIndexPage() {
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col justify-between">
-      {/* Streamlined Verification Sub-Header */}
-      <div className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md px-4 sm:px-6 py-2.5">
+      {/* Sleek Sub-Header without Duplicate Branding */}
+      <div className="border-b border-slate-800/60 bg-slate-950/40 px-4 sm:px-6 py-2">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <Image
-              src="/img/logosp.jpeg"
-              alt="SUCCESS POINT COMPUTER SCHOOL Logo"
-              width={32}
-              height={32}
-              className="w-8 h-8 object-contain rounded-lg shadow-sm bg-white p-0.5 shrink-0"
-            />
-            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 leading-tight">
-              <span className="font-bold text-xs sm:text-sm text-slate-100 tracking-tight group-hover:text-amber-400 transition-colors uppercase">
-                SUCCESS POINT COMPUTER SCHOOL
-              </span>
-              <span className="hidden sm:inline-block text-slate-600 font-normal">|</span>
-              <span className="text-[10px] sm:text-xs font-semibold text-amber-400 tracking-wider uppercase">
-                Certificate Verification Portal
-              </span>
-            </div>
-          </Link>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-amber-400 uppercase tracking-wider text-[11px] sm:text-xs">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              Certificate Verification Portal
+            </span>
+          </div>
 
           <Link
             href="/login"
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 rounded-lg text-xs font-semibold text-white shadow-sm transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-500 rounded-lg text-xs font-semibold text-white shadow-xs transition-colors shrink-0"
           >
             Portal Login
           </Link>

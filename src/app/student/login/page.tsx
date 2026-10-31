@@ -5,40 +5,50 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signInStudent } from '@/lib/supabase/auth-service';
 import { getCurrentPortalUser } from '@/lib/supabase/mock-data';
-import { Award, UserCheck, Lock, ArrowRight, ShieldAlert, CheckCircle2, ShieldCheck, Mail } from 'lucide-react';
+import { Award, UserCheck, ArrowRight, ShieldAlert, ShieldCheck, FileCheck2, Search } from 'lucide-react';
 
 export default function StudentLoginPage() {
   const router = useRouter();
-  const [rollNo, setRollNo] = useState('');
-  const [password, setPassword] = useState('');
+  const [enrollmentNo, setEnrollmentNo] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // If logged in as student, redirect to student dashboard
+    // If already logged in as student, redirect to certificate
     const user = getCurrentPortalUser();
-    if (user) {
-      if (user.role === 'student') {
-        router.push('/student/dashboard');
-      } else if (user.role === 'admin') {
-        router.push('/admin/dashboard');
-      }
+    if (user && user.role === 'student') {
+      window.location.href = '/student/certificate';
     }
-  }, [router]);
+  }, []);
 
   const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const cleanInput = enrollmentNo.trim();
+    if (!cleanInput) {
+      setError('Please enter your Enrollment Number.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      await signInStudent({ roll_no: rollNo, dob_or_password: password });
-      router.push('/student/dashboard');
+      await signInStudent({ enrollment_no: cleanInput });
+      window.location.href = '/student/certificate';
     } catch (err: any) {
-      console.warn('Student login failed:', err?.message || err);
-      setError(err?.message || 'Invalid Roll Number or Password.');
+      console.warn('Student certificate lookup failed:', err?.message || err);
+      setError(
+        err?.message ||
+          `No student certificate found for Enrollment Number "${cleanInput}". Please check the number and try again.`
+      );
       setIsLoading(false);
     }
+  };
+
+  const handleQuickFill = (no: string) => {
+    setEnrollmentNo(no);
+    setError('');
   };
 
   return (
@@ -54,96 +64,106 @@ export default function StudentLoginPage() {
           </div>
         </Link>
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs font-semibold text-blue-400">
-          <UserCheck className="w-4 h-4" />
-          Student Portal Login
+          <Award className="w-4 h-4" />
+          Student Certificate Portal
         </div>
         <h2 className="text-3xl font-extrabold tracking-tight text-white font-serif">
-          Student Credential Access
+          Generate Student Certificate
         </h2>
         <p className="text-xs text-slate-400 max-w-sm mx-auto">
-          Log in with the Roll Number and password assigned to your student account.
+          Enter your official Enrollment Number to search, access, and generate your verified certificate.
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4">
         <div className="bg-slate-900/90 backdrop-blur-2xl py-8 px-6 shadow-2xl rounded-3xl border border-slate-800 sm:px-10 space-y-6">
           {error && (
-            <div className="flex items-center gap-2.5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-xs text-rose-300">
-              <ShieldAlert className="w-5 h-5 shrink-0 text-rose-400" />
+            <div className="flex items-start gap-2.5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-xs text-rose-300">
+              <ShieldAlert className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleStudentLogin} className="space-y-4">
+          <form onSubmit={handleStudentLogin} className="space-y-5">
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                Roll Number / Student ID *
+                Enrollment Number *
               </label>
               <div className="relative rounded-2xl shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                  <UserCheck className="w-4 h-4" />
+                  <Search className="w-4 h-4 text-amber-500" />
                 </div>
                 <input
                   type="text"
                   required
-                  value={rollNo}
-                  onChange={(e) => setRollNo(e.target.value)}
-                  placeholder="e.g. 10101 or SP2024001"
+                  value={enrollmentNo}
+                  onChange={(e) => {
+                    setEnrollmentNo(e.target.value);
+                    if (error) setError('');
+                  }}
+                  placeholder="e.g. EN-320 or 10101"
+                  autoFocus
                   className="block w-full pl-10 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                 />
               </div>
+              <p className="text-[11px] text-slate-400 mt-2">
+                Enter the Enrollment Number or Roll Number from your registration or admission receipt.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                Password *
-              </label>
-              <div className="relative rounded-2xl shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  className="block w-full pl-10 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
-                />
+            {/* Quick Helper Samples */}
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-1.5">
+              <p className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5">
+                <FileCheck2 className="w-3.5 h-3.5 text-emerald-400" />
+                Quick demo enrollment numbers:
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {['EN-320', '320', 'EN-10101', '10101', 'EN-10102'].map((no) => (
+                  <button
+                    key={no}
+                    type="button"
+                    onClick={() => handleQuickFill(no)}
+                    className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-slate-800 hover:bg-amber-500/20 hover:text-amber-300 text-slate-300 border border-slate-700 transition-colors"
+                  >
+                    {no}
+                  </button>
+                ))}
               </div>
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-500 hover:to-amber-500 active:scale-[0.99] disabled:opacity-50 transition-all shadow-lg shadow-blue-600/20"
+              className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-500 hover:to-amber-500 active:scale-[0.99] disabled:opacity-50 transition-all shadow-lg shadow-blue-600/20 cursor-pointer"
             >
               {isLoading ? (
-                <span>Fetching Student Dashboard...</span>
+                <span>Generating Certificate...</span>
               ) : (
                 <>
-                  <span>Sign In to Student Dashboard</span>
+                  <Award className="w-4 h-4" />
+                  <span>Generate Certificate</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
+
           {/* Links to Admin Login and Public Verification */}
           <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
             <Link
               href="/admin/login"
               className="hover:text-amber-400 transition-colors inline-flex items-center gap-1"
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Admin Portal Login →</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+              <span>Admin Login (Email & Password) →</span>
             </Link>
 
             <Link
               href="/verify"
               className="hover:text-amber-400 transition-colors inline-flex items-center gap-1"
             >
-              <Award className="w-3.5 h-3.5" />
-              <span>Verify Certificate</span>
+              <Award className="w-3.5 h-3.5 text-blue-400" />
+              <span>Public Verification</span>
             </Link>
           </div>
         </div>

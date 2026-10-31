@@ -31,16 +31,29 @@ export default function AdminDashboardPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
 
   useEffect(() => {
-    const currentUser = getCurrentPortalUser();
-    if (!currentUser || currentUser.role !== 'admin') {
-      router.push('/admin/login');
-      return;
-    }
-    setUser(currentUser);
+    const verifyAuth = () => {
+      const currentUser = getCurrentPortalUser();
+      if (!currentUser || currentUser.role !== 'admin') {
+        window.location.replace('/admin/login');
+        return false;
+      }
+      setUser(currentUser);
+      return true;
+    };
 
-    fetchStudents().then(setStudents);
-    setLogs(getStoredAuditLogs());
-  }, [router]);
+    if (verifyAuth()) {
+      fetchStudents().then(setStudents);
+      setLogs(getStoredAuditLogs());
+    }
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        verifyAuth();
+      }
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, []);
 
   const handleExportStudentsCSV = () => {
     if (students.length === 0) return;
@@ -80,7 +93,16 @@ export default function AdminDashboardPage() {
     document.body.removeChild(link);
   };
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-400 font-medium">Opening Admin Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   const totalStudents = students.length;
   const totalCertificates = students.filter((s) => s.certificate_no || s.certificate_url).length;

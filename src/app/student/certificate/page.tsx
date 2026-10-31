@@ -30,9 +30,11 @@ export default function StudentCertificatePage() {
       const matched = students.find(
         (s) =>
           s.id === targetId ||
+          (s.enrollment_no && s.enrollment_no.toLowerCase() === targetRoll) ||
           (s.roll_no && s.roll_no.toLowerCase() === targetRoll) ||
           (s.student_id && s.student_id.toLowerCase() === targetRoll) ||
-          (s.roll_number && s.roll_number.toLowerCase() === targetRoll)
+          (s.roll_number && s.roll_number.toLowerCase() === targetRoll) ||
+          (s.certificate_no && s.certificate_no.toLowerCase() === targetRoll)
       ) || (currentUser.role === 'admin' ? students[0] : null);
 
       setStudent(matched || null);

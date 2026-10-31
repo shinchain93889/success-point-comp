@@ -43,6 +43,7 @@ export const INITIAL_MOCK_STUDENTS: StudentRecord[] = [
     student_id: 'SP2024001',
     name: 'Rahul Sharma',
     certificate_no: 'SP-2024-DCA-001',
+    enrollment_no: 'EN-10101',
     issue_date: '2024-05-15',
     phone: '+91 9876543210',
     profile_picture_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400',
@@ -64,6 +65,7 @@ export const INITIAL_MOCK_STUDENTS: StudentRecord[] = [
     student_id: 'SP2024002',
     name: 'Priya Patel',
     certificate_no: 'SP-2024-PGDCA-002',
+    enrollment_no: 'EN-10102',
     issue_date: '2024-06-20',
     phone: '+91 9876543211',
     profile_picture_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=400',
@@ -85,6 +87,7 @@ export const INITIAL_MOCK_STUDENTS: StudentRecord[] = [
     student_id: 'SP2024003',
     name: 'Amit Kumar',
     certificate_no: 'SP-2024-ADFA-003',
+    enrollment_no: 'EN-10103',
     issue_date: '2024-07-10',
     phone: '+91 9876543212',
   },
@@ -105,6 +108,7 @@ export const INITIAL_MOCK_STUDENTS: StudentRecord[] = [
     student_id: 'TEST001',
     name: 'Test Student',
     certificate_no: 'SP-2024-DCA-TEST001',
+    enrollment_no: 'EN-TEST001',
     issue_date: '2024-08-01',
     phone: '+91 9999999999',
   },
@@ -174,17 +178,32 @@ export function getStoredStudents(): StudentRecord[] {
       parsed.unshift(INITIAL_MOCK_STUDENTS[0]);
     }
     const updated = parsed.map((s) => {
-      if (!s.mother_name) {
-        changed = true;
-        const initial = INITIAL_MOCK_STUDENTS.find(
-          (m) => m.roll_no === s.roll_no || m.student_id === s.student_id || m.id === s.id
-        );
-        return {
-          ...s,
-          mother_name: initial?.mother_name || (s.roll_no === '320' ? 'Mrs. Anita Devi' : 'Sunita Sharma'),
-        };
+      let recChanged = false;
+      const initial = INITIAL_MOCK_STUDENTS.find(
+        (m) => m.roll_no === s.roll_no || m.student_id === s.student_id || m.id === s.id
+      );
+
+      let motherName = s.mother_name;
+      if (!motherName) {
+        motherName = initial?.mother_name || (s.roll_no === '320' ? 'Mrs. Anita Devi' : 'Sunita Sharma');
+        recChanged = true;
       }
-      return s;
+
+      let enrollmentNo = s.enrollment_no;
+      if (!enrollmentNo) {
+        enrollmentNo = initial?.enrollment_no || (s.roll_no ? `EN-${s.roll_no}` : `EN-${s.student_id || '10101'}`);
+        recChanged = true;
+      }
+
+      if (recChanged) {
+        changed = true;
+      }
+
+      return {
+        ...s,
+        mother_name: motherName,
+        enrollment_no: enrollmentNo,
+      };
     });
     if (changed) {
       localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(updated));

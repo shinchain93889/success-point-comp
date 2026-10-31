@@ -72,14 +72,28 @@ export default function AdminStudentsPage() {
   const [notification, setNotification] = useState('');
 
   useEffect(() => {
-    const currentUser = getCurrentPortalUser();
-    if (!currentUser || currentUser.role !== 'admin') {
-      router.push('/admin/login');
-      return;
+    const verifyAuth = () => {
+      const currentUser = getCurrentPortalUser();
+      if (!currentUser || currentUser.role !== 'admin') {
+        window.location.replace('/admin/login');
+        return false;
+      }
+      setUser(currentUser);
+      return true;
+    };
+
+    if (verifyAuth()) {
+      refreshStudents();
     }
-    setUser(currentUser);
-    refreshStudents();
-  }, [router]);
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        verifyAuth();
+      }
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, []);
 
   const refreshStudents = async () => {
     setIsLoading(true);
@@ -208,7 +222,16 @@ export default function AdminStudentsPage() {
   const courses = Array.from(new Set(students.map((s) => s.course).filter(Boolean)));
   const sessions = Array.from(new Set(students.map((s) => s.session).filter(Boolean)));
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-400 font-medium">Opening Student Records...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white pb-16">

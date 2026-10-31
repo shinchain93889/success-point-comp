@@ -9,13 +9,9 @@ function sanitizeUrl(url: string | undefined): string {
 export function createClient() {
   const rawUrl = process.env.PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseUrl = sanitizeUrl(rawUrl);
-<<<<<<< HEAD
   const supabaseKey = (
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-=======
-  const supabaseAnonKey = (
     process.env.PUBLIC_SUPABASE_ANON_KEY ||
->>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     ''
   ).trim();
@@ -33,13 +29,9 @@ export function createClient() {
 export function isSupabaseConfigured(): boolean {
   const rawUrl = process.env.PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseUrl = sanitizeUrl(rawUrl);
-<<<<<<< HEAD
   const supabaseKey = (
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-=======
-  const supabaseAnonKey = (
     process.env.PUBLIC_SUPABASE_ANON_KEY ||
->>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     ''
   ).trim();
@@ -52,16 +44,10 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export const supabase = createSupabaseClient(
-<<<<<<< HEAD
-  sanitizeUrl(process.env.NEXT_PUBLIC_SUPABASE_URL) || 'https://placeholder-project.supabase.co',
-  (
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-=======
-  sanitizeUrl(process.env.PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL) ||
-    'https://placeholder-project.supabase.co',
+  sanitizeUrl(process.env.PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL) || 'https://placeholder-project.supabase.co',
   (
     process.env.PUBLIC_SUPABASE_ANON_KEY ||
->>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     'placeholder-anon-key'
   ).trim()

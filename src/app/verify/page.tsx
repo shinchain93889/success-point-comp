@@ -78,7 +78,7 @@ function VerificationContent() {
   const certUrl = student?.certificate_url || student?.pdf_url;
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 py-12 w-full space-y-10">
+    <main className="flex-1 max-w-5xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6 pb-12 w-full space-y-6 sm:space-y-8">
       {/* Search Header */}
       <div className="text-center space-y-4 max-w-2xl mx-auto">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full text-xs font-semibold text-amber-400">
@@ -159,20 +159,25 @@ function VerificationContent() {
           {student ? (
             <div className="space-y-8 animate-in fade-in duration-300">
               {/* Genuine Status Banner */}
-              <div className="bg-emerald-500/10 border-2 border-emerald-500/40 p-6 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left backdrop-blur-xl">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-emerald-500/10">
-                    <ShieldCheck className="w-8 h-8" />
+              <div className="bg-gradient-to-r from-emerald-950/40 via-emerald-900/25 to-slate-900/60 border-2 border-emerald-500/40 rounded-2xl p-4 sm:p-5 md:p-6 backdrop-blur-md shadow-xl shadow-emerald-950/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5 text-center sm:text-left flex-1 min-w-0">
+                  <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-md shadow-emerald-500/10 mx-auto sm:mx-0">
+                    <ShieldCheck className="w-7 h-7 sm:w-8 sm:h-8" />
                   </div>
-                  <div>
-                    <div className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 uppercase tracking-wider bg-emerald-500/20 px-2.5 py-0.5 rounded-full mb-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> VERIFIED GENUINE
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <div className="flex items-center justify-center sm:justify-start gap-2 mb-1 flex-wrap">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-300 uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> VERIFIED GENUINE
+                      </span>
+                      <span className="text-xs font-mono font-semibold text-emerald-300/90 bg-emerald-950/80 border border-emerald-800/60 px-2.5 py-0.5 rounded-md hidden xs:inline-block">
+                        Roll #{student.roll_no || student.roll_number}
+                      </span>
                     </div>
-                    <h2 className="text-xl font-bold text-white font-serif">
+                    <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
                       Authentic Student Record Found
                     </h2>
-                    <p className="text-xs text-slate-300">
-                      This certificate is officially registered in Success Point Database.
+                    <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal">
+                      This certificate is officially issued by Success Point Computer School and verified in our central register.
                     </p>
                   </div>
                 </div>
@@ -315,33 +320,36 @@ function VerificationContent() {
 export default function VerifyIndexPage() {
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col justify-between">
-      {/* Navigation Header */}
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur py-4 px-4 sm:px-8">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
+      {/* Streamlined Verification Sub-Header */}
+      <div className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md px-4 sm:px-6 py-2.5">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <Link href="/" className="flex items-center gap-2.5 group">
             <Image
               src="/img/logosp.jpeg"
-              alt="Success Point Logo"
-              width={40}
-              height={40}
-              className="w-10 h-10 object-contain rounded-xl shadow-md bg-white p-0.5"
+              alt="SUCCESS POINT COMPUTER SCHOOL Logo"
+              width={32}
+              height={32}
+              className="w-8 h-8 object-contain rounded-lg shadow-sm bg-white p-0.5 shrink-0"
             />
-            <div>
-              <h1 className="font-extrabold text-base tracking-tight font-serif uppercase">SUCCESS POINT COMPUTER SCHOOL</h1>
-              <p className="text-[10px] text-amber-400 uppercase tracking-widest font-semibold">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 leading-tight">
+              <span className="font-bold text-xs sm:text-sm text-slate-100 tracking-tight group-hover:text-amber-400 transition-colors uppercase">
+                SUCCESS POINT COMPUTER SCHOOL
+              </span>
+              <span className="hidden sm:inline-block text-slate-600 font-normal">|</span>
+              <span className="text-[10px] sm:text-xs font-semibold text-amber-400 tracking-wider uppercase">
                 Certificate Verification Portal
-              </p>
+              </span>
             </div>
           </Link>
 
           <Link
             href="/login"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-xs font-semibold text-white shadow-md transition-colors"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 rounded-lg text-xs font-semibold text-white shadow-sm transition-colors shrink-0"
           >
             Portal Login
           </Link>
         </div>
-      </header>
+      </div>
 
       <Suspense fallback={
         <div className="flex-1 flex items-center justify-center py-20 text-slate-400 text-sm">
@@ -352,9 +360,7 @@ export default function VerifyIndexPage() {
         <VerificationContent />
       </Suspense>
 
-      <footer className="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
-        <p>© {new Date().getFullYear()} Success Point Educational & Technical Institute. All rights reserved.</p>
-      </footer>
+
     </div>
   );
 }

@@ -403,10 +403,6 @@ export async function createStudent(
       } else if (insertRes.error) {
         const errDetail = insertRes.error.message || insertRes.error.details || JSON.stringify(insertRes.error);
 
-<<<<<<< HEAD
-        if (insertRes.error.code === '23505') {
-          throw new Error(`Student record with Roll No '${rollNo}' already exists.`);
-=======
         const isNetworkError =
           errDetail.toLowerCase().includes('failed to fetch') ||
           errDetail.toLowerCase().includes('fetch failed') ||
@@ -433,7 +429,6 @@ export async function createStudent(
           } else {
             throw new Error(`Supabase Error (${insertRes.error.code || 'UNKNOWN'}): ${errDetail}`);
           }
->>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
         }
 
         if (insertRes.error.code === '42501') {
@@ -676,9 +671,6 @@ export async function updateStudent(
 
   if (isSupabaseConfigured() && !supabaseUpdatedRecord) {
     const errMsg = lastError?.message || (typeof lastError === 'string' ? lastError : '');
-<<<<<<< HEAD
-    console.warn('Supabase update notice (updated locally):', errMsg);
-=======
     const isNetworkError =
       !lastError ||
       errMsg.toLowerCase().includes('failed to fetch') ||
@@ -706,7 +698,6 @@ export async function updateStudent(
     } else {
       console.warn('Supabase update failed due to network issue, falling back to local storage:', errMsg);
     }
->>>>>>> 3c9b19b0adbaee55640a526c505ea6865898215f
   }
 
   return updatedLocal ? normalizeStudentRow(updatedLocal) : supabaseUpdatedRecord;

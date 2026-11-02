@@ -62,7 +62,7 @@ export default function StudentCertificatePage() {
         </div>
 
         <div className="w-full flex justify-center items-center">
-          <CertificateCard student={student} showActions={true} isAdmin={user.role === 'admin'} />
+          <CertificateCard student={student} showActions={true} isAdmin={false} />
         </div>
       </main>
     </div>

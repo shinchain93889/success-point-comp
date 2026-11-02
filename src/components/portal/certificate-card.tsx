@@ -153,17 +153,18 @@ async function waitForCertificateAssets(element: HTMLElement) {
   await withTimeout(fontReady, 5000);
 
   await Promise.all(Array.from(element.querySelectorAll('img')).map(async (image) => {
-    if (!image.complete) {
-      await new Promise<void>((resolve) => {
-        const timeout = window.setTimeout(resolve, 10000);
-        const finish = () => {
-          window.clearTimeout(timeout);
-          resolve();
-        };
-        image.addEventListener('load', finish, { once: true });
-        image.addEventListener('error', finish, { once: true });
-      });
+    if (image.complete && image.naturalWidth > 0) {
+      return;
     }
+    await new Promise<void>((resolve) => {
+      const timeout = window.setTimeout(resolve, 8000);
+      const finish = () => {
+        window.clearTimeout(timeout);
+        resolve();
+      };
+      image.addEventListener('load', finish, { once: true });
+      image.addEventListener('error', finish, { once: true });
+    });
 
     if (image.complete && image.naturalWidth > 0 && typeof image.decode === 'function') {
       await withTimeout(image.decode(), 2000);
@@ -193,7 +194,8 @@ export function CertificateCard({
     }
   }, []);
 
-  const isAdmin = isAdminProp !== undefined ? isAdminProp : (currentUserRole === 'admin');
+  // Editable controls ONLY appear when explicitly enabled by Admin Panel (isAdmin = true)
+  const isAdmin = Boolean(isAdminProp);
 
   const [currentPhoto, setCurrentPhoto] = useState<string | null>(
     student.profile_picture_url || student.photo_url || student.student_image || null
@@ -382,6 +384,7 @@ export function CertificateCard({
         });
         if (updated) {
           onPhotoUpdated?.(updated);
+          onStudentUpdated?.(updated);
         }
       }
     } catch (err) {
@@ -433,50 +436,88 @@ export function CertificateCard({
     window.print();
   };
 
-  const handleDownloadPDF = async () => {
-    if (certUrl) {
-      const link = document.createElement('a');
-      link.href = certUrl;
-      link.target = '_blank';
-      link.download = `Certificate_${rollNo}_${studentName.replace(/\s+/g, '_')}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      return;
-    }
+  const captureFullCertificateCanvas = async () => {
+    if (!certRef.current) return null;
+    const element = certRef.current;
+    const isPortrait = templateView === 'official';
+    const pageWidth = isPortrait ? 794 : 1123;
+    const a4PageHeight = isPortrait ? 1123 : 794;
+    // The certificate can grow when names, course titles, or subjects wrap.
+    // Capture its full content so the PDF fit step scales it onto the A4 page
+    // instead of silently clipping the lower details or photo.
+    const pageHeight = Math.max(a4PageHeight, element.scrollHeight);
 
-    if (!certRef.current) return;
+    await waitForCertificateAssets(element);
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      imageTimeout: 15000,
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
+      width: pageWidth,
+      height: pageHeight,
+      windowWidth: pageWidth,
+      windowHeight: pageHeight,
+      onclone: (clonedDoc, clonedCert) => {
+        // 1. Ensure whole cloned document and body are completely unconstrained
+        clonedDoc.documentElement.style.overflow = 'visible';
+        clonedDoc.documentElement.style.height = 'auto';
+        clonedDoc.documentElement.style.maxHeight = 'none';
+        clonedDoc.body.style.overflow = 'visible';
+        clonedDoc.body.style.height = 'auto';
+        clonedDoc.body.style.maxHeight = 'none';
+        clonedDoc.body.style.margin = '0';
+        clonedDoc.body.style.padding = '0';
+
+        // 2. Remove any modal scroll clipping, overflow, or max-height on all ancestors
+        let ancestor: HTMLElement | null = clonedCert.parentElement;
+        while (ancestor) {
+          ancestor.style.overflow = 'visible';
+          ancestor.style.maxHeight = 'none';
+          ancestor.style.height = 'auto';
+          ancestor.style.transform = 'none';
+          ancestor.style.filter = 'none';
+          ancestor.style.contain = 'none';
+          ancestor = ancestor.parentElement;
+        }
+
+        // 3. Force exact full A4 dimensions on the certificate itself
+        Object.assign(clonedCert.style, {
+          position: 'relative',
+          width: `${pageWidth}px`,
+          height: `${pageHeight}px`,
+          minWidth: `${pageWidth}px`,
+          maxWidth: `${pageWidth}px`,
+          minHeight: `${a4PageHeight}px`,
+          maxHeight: 'none',
+          aspectRatio: 'auto',
+          margin: '0 auto',
+          boxSizing: 'border-box',
+          overflow: 'visible',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          transform: 'none',
+        });
+      },
+    });
+
+    return { canvas, isPortrait, pageWidth, pageHeight };
+  };
+
+  const handleDownloadPDF = async () => {
     try {
       setIsGenerating(true);
-      const element = certRef.current;
-      const isPortrait = templateView === 'official';
-      // Keep PDF capture at the certificate's A4 CSS-pixel dimensions so responsive
-      // preview width and dynamic student text cannot change the frame geometry.
-      const pageWidth = isPortrait ? 794 : 1123;
-      const pageHeight = isPortrait ? 1123 : 794;
-      await waitForCertificateAssets(element);
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        imageTimeout: 10000,
-        width: pageWidth,
-        height: pageHeight,
-        windowWidth: pageWidth,
-        windowHeight: pageHeight,
-        onclone: (_clonedDocument, clonedCertificate) => {
-          Object.assign(clonedCertificate.style, {
-            width: `${pageWidth}px`,
-            height: `${pageHeight}px`,
-            maxWidth: 'none',
-            minWidth: `${pageWidth}px`,
-            aspectRatio: 'auto',
-            margin: '0',
-            boxSizing: 'border-box',
-          });
-        },
-      });
+      const result = await captureFullCertificateCanvas();
+      if (!result) return;
+      const { canvas, isPortrait } = result;
+
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
       const pdf = new jsPDF({
         orientation: isPortrait ? 'portrait' : 'landscape',
@@ -504,17 +545,13 @@ export function CertificateCard({
   };
 
   const handleDownloadImage = async () => {
-    if (!certRef.current) return;
     try {
       setIsGeneratingImage(true);
-      const element = certRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
-      // High-quality JPEG for crisp clarity under 1 MB
+      const result = await captureFullCertificateCanvas();
+      if (!result) return;
+      const { canvas } = result;
+
+      // High-quality JPEG for crisp clarity at full A4 scale
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const link = document.createElement('a');
       link.href = imgData;
@@ -568,110 +605,119 @@ export function CertificateCard({
               </button>
             </div>
 
-            {/* Mother's Name Option Toggle & Quick Edit */}
-            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
-              <button
-                type="button"
-                onClick={() => setShowMotherName(!showMotherName)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${showMotherName
-                  ? 'bg-amber-500 text-white font-bold shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                title="Toggle Mother's Name on Certificate"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Mother's Name: {showMotherName ? 'ON' : 'OFF'}</span>
-              </button>
-
-              {showActions && (
+            {/* Mother's Name Option Toggle & Quick Edit (Admin Only) */}
+            {isAdmin && (
+              <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
                 <button
                   type="button"
-                  onClick={() => setIsEditingMotherName(!isEditingMotherName)}
-                  className="p-1 rounded text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                  title="Edit Mother's Name"
+                  onClick={() => setShowMotherName(!showMotherName)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${showMotherName
+                    ? 'bg-amber-500 text-white font-bold shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  title="Toggle Mother's Name on Certificate"
                 >
-                  <Edit2 className="w-3.5 h-3.5" />
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Mother's Name: {showMotherName ? 'ON' : 'OFF'}</span>
                 </button>
-              )}
-            </div>
 
-            {/* Course & Subject Option Selector / Toggle */}
-            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
-              <button
-                type="button"
-                onClick={() => setShowSubject(!showSubject)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${showSubject
-                  ? 'bg-blue-600 text-white font-bold shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                title="Toggle Subject Line on Certificate"
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>Subject: {showSubject ? 'ON' : 'OFF'}</span>
-              </button>
+                {showActions && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMotherName(!isEditingMotherName)}
+                    className="p-1 rounded text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    title="Edit Mother's Name"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
 
-              {showActions && (
+            {/* Course & Subject Option Selector / Toggle (Admin Only) */}
+            {isAdmin && (
+              <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShowSubject(!showSubject)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${showSubject
+                    ? 'bg-blue-600 text-white font-bold shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  title="Toggle Subject Line on Certificate"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Subject: {showSubject ? 'ON' : 'OFF'}</span>
+                </button>
+
+                {showActions && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingCourse(!isEditingCourse);
+                      if (isEditingMotherName) setIsEditingMotherName(false);
+                      if (isEditingPercentage) setIsEditingPercentage(false);
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${isEditingCourse
+                      ? 'bg-amber-500 text-white font-bold shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    title="Configure Course and Subject in which student completed course"
+                  >
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    <span>Course Option</span>
+                    <Edit2 className="w-3 h-3 ml-0.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Percentage & Grade Quick Option (Admin Only) */}
+            {isAdmin && (
+              <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsEditingCourse(!isEditingCourse);
+                    setIsEditingPercentage(!isEditingPercentage);
                     if (isEditingMotherName) setIsEditingMotherName(false);
-                    if (isEditingPercentage) setIsEditingPercentage(false);
+                    if (isEditingCourse) setIsEditingCourse(false);
                   }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${isEditingCourse
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${isEditingPercentage
                     ? 'bg-amber-500 text-white font-bold shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
-                  title="Configure Course and Subject in which student completed course"
+                  title="Edit Percentage and Grade on Certificate"
                 >
-                  <GraduationCap className="w-3.5 h-3.5" />
-                  <span>Course Option</span>
+                  <Percent className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Percentage: <strong className="font-mono text-blue-700 dark:text-blue-400">{currentMarks}</strong> ({currentGrade})</span>
                   <Edit2 className="w-3 h-3 ml-0.5" />
                 </button>
-              )}
-            </div>
-
-            {/* Percentage & Grade Quick Option */}
-            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEditingPercentage(!isEditingPercentage);
-                  if (isEditingMotherName) setIsEditingMotherName(false);
-                  if (isEditingCourse) setIsEditingCourse(false);
-                }}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${isEditingPercentage
-                  ? 'bg-amber-500 text-white font-bold shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-                title="Edit Percentage and Grade on Certificate"
-              >
-                <Percent className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                <span>Percentage: <strong className="font-mono text-blue-700 dark:text-blue-400">{currentMarks}</strong> ({currentGrade})</span>
-                <Edit2 className="w-3 h-3 ml-0.5" />
-              </button>
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <label
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-700/60 rounded-lg cursor-pointer transition-colors shadow-xs"
-              title="Upload or change student photo on this certificate"
-            >
-              {isUploadingPhoto ? (
-                <Loader2 className="w-4 h-4 animate-spin text-amber-700 dark:text-amber-300" />
-              ) : (
-                <Camera className="w-4 h-4 text-amber-700 dark:text-amber-300" />
-              )}
-              <span>{isUploadingPhoto ? 'Uploading...' : currentPhoto ? 'Change Student Photo' : 'Upload Student Photo'}</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoSelect}
-                className="hidden"
-                disabled={isUploadingPhoto}
-              />
-            </label>
+            {/* Upload Student Photo (Admin Only) */}
+            {isAdmin && (
+              <label
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-700/60 rounded-lg cursor-pointer transition-colors shadow-xs"
+                title="Upload or change student photo on this certificate"
+              >
+                {isUploadingPhoto ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-700 dark:text-amber-300" />
+                ) : (
+                  <Camera className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+                )}
+                <span>{isUploadingPhoto ? 'Uploading...' : currentPhoto ? 'Change Student Photo' : 'Upload Student Photo'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoSelect}
+                  className="hidden"
+                  disabled={isUploadingPhoto}
+                />
+              </label>
+            )}
 
             <button
               onClick={handleCopyLink}
@@ -726,7 +772,7 @@ export function CertificateCard({
       )}
 
       {/* Mother's Name Inline Edit Bar */}
-      {showActions && isEditingMotherName && (
+      {showActions && isAdmin && isEditingMotherName && (
         <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex flex-wrap items-center gap-2 text-xs print:hidden shadow-xs">
           <span className="font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-1">
             <Users className="w-3.5 h-3.5 text-amber-600" />
@@ -764,7 +810,7 @@ export function CertificateCard({
       )}
 
       {/* Course & Subject Quick Selector & Inline Editor */}
-      {showActions && isEditingCourse && (
+      {showActions && isAdmin && isEditingCourse && (
         <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-blue-950/40 border border-blue-200 dark:border-blue-800/80 rounded-xl space-y-3 text-xs print:hidden shadow-md">
           <div className="flex items-center justify-between border-b border-blue-200/60 dark:border-blue-800/60 pb-2">
             <div className="flex items-center gap-2">
@@ -905,7 +951,7 @@ export function CertificateCard({
       )}
 
       {/* Percentage & Grade Quick Inline Editor */}
-      {showActions && isEditingPercentage && (
+      {showActions && isAdmin && isEditingPercentage && (
         <div className="p-4 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 dark:from-slate-900 dark:via-amber-950/30 dark:to-slate-900 border border-amber-300 dark:border-amber-800/80 rounded-xl space-y-3 text-xs print:hidden shadow-md">
           <div className="flex items-center justify-between border-b border-amber-200/80 dark:border-amber-800/60 pb-2">
             <div className="flex items-center gap-2">
@@ -1096,15 +1142,16 @@ export function CertificateCard({
               </div>
 
               {/* Logo, Title & Student Photo Grid */}
-              <div className="grid shrink-0 grid-cols-[100px_1fr_100px] sm:grid-cols-[120px_1fr_120px] items-center my-2 sm:my-3 z-10 px-2 sm:px-3">
+              <div className="grid shrink-0 grid-cols-[115px_1fr_100px] sm:grid-cols-[130px_1fr_120px] items-center my-2 sm:my-3 z-10 px-2 sm:px-3">
                 {/* Left: Institute Logo - INSET WITH SAFE PADDING TO PREVENT CUTOFF */}
                 <div className="flex justify-start items-center pl-1 sm:pl-2">
-                  <div className="w-22 h-22 sm:w-24 sm:h-24 flex items-center justify-center shrink-0">
+                  <div className="w-[105px] h-[105px] sm:w-[115px] sm:h-[115px] flex items-center justify-center shrink-0">
                     <img
                       src="/img/logosp.jpeg"
                       alt="Success Point Logo"
-                      className="max-w-full max-h-full object-contain"
-                      style={{ width: '92px', height: '92px', objectFit: 'contain' }}
+                      crossOrigin="anonymous"
+                      className="max-w-full max-h-full object-contain drop-shadow-xs"
+                      style={{ width: '108px', height: '108px', objectFit: 'contain' }}
                     />
                   </div>
                 </div>
@@ -1171,7 +1218,7 @@ export function CertificateCard({
                         className="w-full h-full object-cover border-2 border-amber-600 shadow-sm rounded-xs"
                         style={{ width: '92px', height: '115px', objectFit: 'cover' }}
                       />
-                      {showActions && (
+                      {showActions && isAdmin && (
                         <label
                           className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold cursor-pointer transition-opacity print:hidden p-1 text-center"
                           title="Click to Change Student Photo"
@@ -1190,9 +1237,9 @@ export function CertificateCard({
                     </div>
                   ) : (
                     <label
-                      className={`border border-slate-600 border-dashed flex flex-col items-center justify-center text-slate-500 bg-slate-50 rounded-xs shrink-0 ${showActions ? 'cursor-pointer hover:bg-slate-100 hover:border-black hover:text-black transition-colors' : ''}`}
+                      className={`border border-slate-600 border-dashed flex flex-col items-center justify-center text-slate-500 bg-slate-50 rounded-xs shrink-0 ${showActions && isAdmin ? 'cursor-pointer hover:bg-slate-100 hover:border-black hover:text-black transition-colors' : ''}`}
                       style={{ width: '96px', height: '118px' }}
-                      title={showActions ? "Click to Upload Student Photo" : "Student Photo"}
+                      title={showActions && isAdmin ? "Click to Upload Student Photo" : "Student Photo"}
                     >
                       {isUploadingPhoto ? (
                         <>
@@ -1202,10 +1249,12 @@ export function CertificateCard({
                       ) : (
                         <>
                           <User className="w-7 h-7 opacity-50" />
-                          <span className="text-[10px] font-bold mt-1 text-center px-1">Upload Photo</span>
+                          <span className="text-[10px] font-bold mt-1 text-center px-1">
+                            {showActions && isAdmin ? 'Upload Photo' : 'Student Photo'}
+                          </span>
                         </>
                       )}
-                      {showActions && (
+                      {showActions && isAdmin && (
                         <input
                           type="file"
                           accept="image/*"
@@ -1443,12 +1492,12 @@ export function CertificateCard({
             {/* Header */}
             <div className="text-center space-y-2 relative z-10">
               <div className="flex items-center justify-center gap-3">
-                <Image
+                <img
                   src="/img/logosp.jpeg"
                   alt="Success Point Logo"
-                  width={56}
-                  height={56}
-                  className="w-14 h-14 object-contain rounded-lg shadow-sm"
+                  crossOrigin="anonymous"
+                  className="w-16 h-16 sm:w-[68px] sm:h-[68px] object-contain rounded-lg shadow-sm"
+                  style={{ width: '68px', height: '68px', objectFit: 'contain' }}
                 />
                 <div className="text-left">
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 uppercase font-serif">
@@ -1540,23 +1589,13 @@ export function CertificateCard({
               <div className="flex items-center gap-3 text-left">
                 {currentPhoto ? (
                   <div className="relative group">
-                    {currentPhoto.startsWith('data:') ? (
-                      <img
-                        src={currentPhoto}
-                        alt={studentName}
-                        className="w-14 h-14 rounded-lg object-cover border border-slate-300 shadow-sm"
-                      />
-                    ) : (
-                      <Image
-                        src={currentPhoto}
-                        alt={studentName}
-                        width={56}
-                        height={56}
-                        unoptimized
-                        className="w-14 h-14 rounded-lg object-cover border border-slate-300 shadow-sm"
-                      />
-                    )}
-                    {showActions && (
+                    <img
+                      src={currentPhoto}
+                      alt={studentName}
+                      className="w-14 h-14 rounded-lg object-cover border border-slate-300 shadow-sm"
+                      style={{ width: '56px', height: '56px', objectFit: 'cover' }}
+                    />
+                    {showActions && isAdmin && (
                       <label
                         className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold cursor-pointer transition-opacity rounded-lg print:hidden"
                         title="Click to Change Student Photo"
@@ -1574,16 +1613,16 @@ export function CertificateCard({
                   </div>
                 ) : (
                   <label
-                    className={`w-14 h-14 rounded-lg bg-slate-100 border border-slate-300 border-dashed flex flex-col items-center justify-center text-slate-400 ${showActions ? 'cursor-pointer hover:bg-slate-200 hover:border-amber-600 hover:text-amber-700 transition-colors' : ''
+                    className={`w-14 h-14 rounded-lg bg-slate-100 border border-slate-300 border-dashed flex flex-col items-center justify-center text-slate-400 ${showActions && isAdmin ? 'cursor-pointer hover:bg-slate-200 hover:border-amber-600 hover:text-amber-700 transition-colors' : ''
                       }`}
-                    title={showActions ? "Click to Upload Student Photo" : "Student Photo"}
+                    title={showActions && isAdmin ? "Click to Upload Student Photo" : "Student Photo"}
                   >
                     {isUploadingPhoto ? (
                       <Loader2 className="w-5 h-5 animate-spin text-amber-600" />
                     ) : (
                       <User className="w-6 h-6" />
                     )}
-                    {showActions && (
+                    {showActions && isAdmin && (
                       <input
                         type="file"
                         accept="image/*"

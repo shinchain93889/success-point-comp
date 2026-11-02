@@ -217,38 +217,38 @@ export default function Header() {
                 <nav className="flex flex-col space-y-2">
                   {isPortalMode
                     ? portalLinks.map((item) => {
-                        const Icon = item.icon;
-                        const isActive = pathname === item.href;
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => setIsMobileMenuOpen(false)}
-                            className={cn(
-                              "flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-xl transition-colors",
-                              isActive
-                                ? "bg-amber-500/15 text-amber-500"
-                                : "text-foreground/80 hover:bg-accent"
-                            )}
-                          >
-                            <Icon className="w-4 h-4" />
-                            <span>{item.label}</span>
-                          </Link>
-                        );
-                      })
-                    : publicNavLinks.map(({ href, label }) => (
+                      const Icon = item.icon;
+                      const isActive = pathname === item.href;
+                      return (
                         <Link
-                          key={label}
-                          href={href}
+                          key={item.href}
+                          href={item.href}
                           onClick={() => setIsMobileMenuOpen(false)}
                           className={cn(
-                            "px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-accent",
-                            pathname === href ? "text-primary font-bold" : "text-foreground/80"
+                            "flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-xl transition-colors",
+                            isActive
+                              ? "bg-amber-500/15 text-amber-500"
+                              : "text-foreground/80 hover:bg-accent"
                           )}
                         >
-                          {label}
+                          <Icon className="w-4 h-4" />
+                          <span>{item.label}</span>
                         </Link>
-                      ))}
+                      );
+                    })
+                    : publicNavLinks.map(({ href, label }) => (
+                      <Link
+                        key={label}
+                        href={href}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={cn(
+                          "px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-accent",
+                          pathname === href ? "text-primary font-bold" : "text-foreground/80"
+                        )}
+                      >
+                        {label}
+                      </Link>
+                    ))}
                 </nav>
 
                 <div className="mt-auto pt-4 flex flex-col gap-2">

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { StudentRecord } from '@/lib/types/portal';
 import { fetchStudentByRollNo } from '@/lib/supabase/student-service';
 import { CertificateCard } from '@/components/portal/certificate-card';
+import { getCurrentPortalUser } from '@/lib/supabase/mock-data';
 import { CheckCircle2, ShieldCheck, XCircle, Search } from 'lucide-react';
 
 export default function VerifyCertificatePage() {
@@ -14,6 +15,12 @@ export default function VerifyCertificatePage() {
   const [student, setStudent] = useState<StudentRecord | null>(null);
   const [searched, setSearched] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const user = getCurrentPortalUser();
+    setIsAdmin(user?.role === 'admin');
+  }, []);
 
   useEffect(() => {
     if (certNo) {
@@ -94,7 +101,7 @@ export default function VerifyCertificatePage() {
 
             {/* Certificate Component (Borders, Dimensions, & Actions Preserved) */}
                     <div className="text-slate-900 w-full flex justify-center items-center">
-                      <CertificateCard student={student} showActions={true} />
+                      <CertificateCard student={student} showActions={true} isAdmin={false} />
                     </div>
                 </div>
               ) : (

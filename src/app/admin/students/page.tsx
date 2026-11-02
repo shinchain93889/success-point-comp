@@ -12,7 +12,7 @@ import {
   deleteStudent,
 } from '@/lib/supabase/student-service';
 import { StudentRecord, UserProfile } from '@/lib/types/portal';
-import { INSTITUTE_COURSES, COURSE_SUBJECT_PRESETS, calculateGradeFromMarks } from '@/components/portal/certificate-card';
+import { CertificateCard, INSTITUTE_COURSES, COURSE_SUBJECT_PRESETS, calculateGradeFromMarks } from '@/components/portal/certificate-card';
 import {
   Search,
   Filter,
@@ -28,6 +28,7 @@ import {
   Download,
   Loader2,
   Percent,
+  Award,
 } from 'lucide-react';
 
 export default function AdminStudentsPage() {
@@ -48,6 +49,7 @@ export default function AdminStudentsPage() {
 
   // Edit Modal State
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
+  const [previewCertStudent, setPreviewCertStudent] = useState<StudentRecord | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
   // Add Modal State
@@ -413,10 +415,18 @@ export default function AdminStudentsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-right space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewCertStudent(student)}
+                            className="inline-flex items-center p-1.5 text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 rounded-lg transition-colors"
+                            title="Manage & Edit Certificate"
+                          >
+                            <Award className="w-4 h-4" />
+                          </button>
                           <Link
                             href={`/verify?roll_no=${encodeURIComponent(student.roll_no || student.roll_number || '')}`}
-                            className="inline-flex items-center p-1.5 text-slate-600 hover:text-amber-600 bg-slate-100 dark:bg-slate-800 rounded-lg"
-                            title="Verify Record"
+                            className="inline-flex items-center p-1.5 text-slate-600 hover:text-blue-600 bg-slate-100 dark:bg-slate-800 rounded-lg"
+                            title="Public Verify Record"
                           >
                             <Eye className="w-4 h-4" />
                           </Link>
@@ -717,6 +727,51 @@ export default function AdminStudentsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Certificate Admin View & Edit Modal */}
+      {previewCertStudent && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-5xl w-full p-4 sm:p-6 my-auto max-h-[95vh] overflow-y-auto shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-white text-base">Certificate Management & Customization</span>
+                <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  {previewCertStudent.certificate_no}
+                </span>
+                <span className="text-xs text-slate-400">
+                  ({previewCertStudent.student_name || previewCertStudent.name})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewCertStudent(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                title="Close Certificate Modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="w-full flex justify-center items-center py-2">
+              <CertificateCard
+                student={previewCertStudent}
+                showActions={true}
+                isAdmin={true}
+                onStudentUpdated={(updated) => {
+                  setPreviewCertStudent(updated);
+                  setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+                  showToast('Certificate information updated successfully');
+                }}
+                onPhotoUpdated={(updated) => {
+                  setPreviewCertStudent(updated);
+                  setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+                  showToast('Student photo updated successfully');
+                }}
+              />
+            </div>
           </div>
         </div>
       )}

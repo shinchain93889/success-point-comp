@@ -274,12 +274,28 @@ export function addStoredStudent(studentData: any): StudentRecord {
 
 export function updateStoredStudent(id: string, updates: Partial<StudentRecord>): StudentRecord | null {
   const students = getStoredStudents();
+  const targetId = (id || updates.roll_no || updates.student_id || updates.roll_number || updates.certificate_no || '').trim().toLowerCase();
   const index = students.findIndex(
-    (s) => s.id === id || s.roll_no === id || s.student_id === id || s.roll_number === id
+    (s) =>
+      (s.id && s.id.toLowerCase() === targetId) ||
+      (s.roll_no && s.roll_no.toLowerCase() === targetId) ||
+      (s.student_id && s.student_id.toLowerCase() === targetId) ||
+      (s.roll_number && s.roll_number.toLowerCase() === targetId) ||
+      (s.certificate_no && s.certificate_no.toLowerCase() === targetId) ||
+      (updates.roll_no && s.roll_no && s.roll_no.toLowerCase() === updates.roll_no.toLowerCase()) ||
+      (updates.certificate_no && s.certificate_no && s.certificate_no.toLowerCase() === updates.certificate_no.toLowerCase())
   );
   if (index === -1) return null;
 
   const existing = students[index];
+  const finalPhoto =
+    updates.profile_picture_url ||
+    updates.photo_url ||
+    updates.student_image ||
+    existing.profile_picture_url ||
+    existing.photo_url ||
+    existing.student_image ||
+    null;
   const updatedStudent: StudentRecord = {
     ...existing,
     ...updates,
@@ -287,6 +303,12 @@ export function updateStoredStudent(id: string, updates: Partial<StudentRecord>)
     name: updates.student_name || updates.name || existing.name,
     roll_no: updates.roll_no || updates.roll_number || existing.roll_no,
     roll_number: updates.roll_no || updates.roll_number || existing.roll_number,
+    profile_picture_url: finalPhoto,
+    photo_url: finalPhoto,
+    student_image: finalPhoto,
+    subject: updates.subject || existing.subject || updates.course || existing.course,
+    course: updates.course || existing.course,
+    mother_name: updates.mother_name !== undefined && updates.mother_name !== '' ? updates.mother_name : existing.mother_name,
   };
   students[index] = updatedStudent;
   saveStoredStudents(students);

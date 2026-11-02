@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { PortalNav } from '@/components/portal/portal-nav';
 import { getCurrentPortalUser } from '@/lib/supabase/mock-data';
 import { fetchStudents, updateStudent } from '@/lib/supabase/student-service';
-import { calculateGradeFromMarks } from '@/components/portal/certificate-card';
+import { CertificateCard, calculateGradeFromMarks } from '@/components/portal/certificate-card';
 import { StudentRecord, UserProfile } from '@/lib/types/portal';
 import {
   Award,
@@ -31,6 +31,7 @@ export default function AdminCertificatesPage() {
 
   // Manual Edit Percentage & Grade Modal State
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
+  const [previewStudent, setPreviewStudent] = useState<StudentRecord | null>(null);
   const [marksInput, setMarksInput] = useState<string>('');
   const [gradeInput, setGradeInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -229,13 +230,21 @@ export default function AdminCertificatesPage() {
                   Edit % & Grade
                 </button>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewStudent(student)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-xs"
+                    title="View and edit student certificate options directly in admin portal"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    View & Edit Certificate
+                  </button>
                   <Link
                     href={`/verify/${student.certificate_no}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg transition-colors"
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                    View & Verify
+                    Public View
                   </Link>
 
                   <Link
@@ -251,6 +260,51 @@ export default function AdminCertificatesPage() {
           ))}
         </div>
       </main>
+
+      {/* Full Certificate Admin View & Edit Modal */}
+      {previewStudent && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-5xl w-full p-4 sm:p-6 my-auto max-h-[95vh] overflow-y-auto shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-white text-base">Certificate Management & Customization</span>
+                <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  {previewStudent.certificate_no}
+                </span>
+                <span className="text-xs text-slate-400">
+                  ({previewStudent.name || previewStudent.student_name})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewStudent(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                title="Close Certificate Modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="w-full flex justify-center items-center py-2">
+              <CertificateCard
+                student={previewStudent}
+                showActions={true}
+                isAdmin={true}
+                onStudentUpdated={(updated) => {
+                  setPreviewStudent(updated);
+                  setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+                  showToast('Certificate information updated successfully');
+                }}
+                onPhotoUpdated={(updated) => {
+                  setPreviewStudent(updated);
+                  setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+                  showToast('Student photo updated successfully');
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Manual Percentage & Grade Edit Modal */}
       {editingStudent && (

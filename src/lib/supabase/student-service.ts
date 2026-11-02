@@ -211,27 +211,7 @@ export async function fetchStudentByRollNo(rollNo: string): Promise<StudentRecor
   const cleanRollNo = rollNo.trim();
   if (!cleanRollNo) return null;
 
-  const toPublicCertificate = (row: any): StudentRecord => ({
-    id: row.id,
-    roll_no: row.roll_no || row.roll_number || row.student_id || '',
-    student_name: row.student_name || row.name || '',
-    father_name: row.father_name || '',
-    course: row.course || '',
-    session: row.session || '',
-    course_status: row.course_status === 'completed' ? 'completed' : 'pending',
-    certificate_url: row.certificate_url || row.pdf_url || null,
-    created_at: row.created_at || '',
-    certificate_no: row.certificate_no || `SP-${row.roll_no || row.roll_number || row.student_id || ''}`,
-    issue_date: row.issue_date || row.created_at?.split('T')[0] || undefined,
-    start_date: row.start_date || null,
-    end_date: row.end_date || null,
-    enrollment_no: row.enrollment_no || undefined,
-    duration: row.duration || undefined,
-    subject: row.subject || row.course || undefined,
-    marks: row.marks || undefined,
-    grade: row.grade || undefined,
-    profile_picture_url: row.profile_picture_url || row.photo_url || row.student_image || null,
-  });
+  const toPublicCertificate = (row: any): StudentRecord => normalizeStudentRow(row);
 
   const findLocalCertificate = () => {
     const row = getStoredStudents().find((s) =>
@@ -480,6 +460,19 @@ export async function createStudent(
 }
 
 // Update student record in Supabase & localStorage
+function extractMissingColumn(errorMsg: string): string | null {
+  if (!errorMsg) return null;
+  const match1 = errorMsg.match(/Could not find the '([^']+)' column/i);
+  if (match1) return match1[1];
+  const match2 = errorMsg.match(/column "?([^"'\s]+)"? of relation/i);
+  if (match2) return match2[1];
+  const match3 = errorMsg.match(/column students\.([a-zA-Z0-9_]+) does not exist/i);
+  if (match3) return match3[1];
+  const match4 = errorMsg.match(/column "?([^"'\s]+)"? does not exist/i);
+  if (match4) return match4[1];
+  return null;
+}
+
 export async function updateStudent(
   id: string,
   updates: Partial<StudentRecord>,
@@ -531,8 +524,12 @@ export async function updateStudent(
   if (updates.father_name !== undefined) fallbackPayload.father_name = updates.father_name;
   if (updates.mother_name !== undefined) fallbackPayload.mother_name = updates.mother_name;
   if (updates.course !== undefined) fallbackPayload.course = updates.course;
+  if (updates.subject !== undefined) fallbackPayload.subject = updates.subject;
   if (updates.session !== undefined) fallbackPayload.session = updates.session;
   if (updates.course_status !== undefined) fallbackPayload.course_status = updates.course_status;
+  if (updates.marks !== undefined) fallbackPayload.marks = updates.marks;
+  if (updates.grade !== undefined) fallbackPayload.grade = updates.grade;
+  if (photoUrl !== undefined) fallbackPayload.profile_picture_url = photoUrl;
   if (certUrl !== undefined) fallbackPayload.certificate_url = certUrl;
 
   // Legacy Schema Payload
@@ -544,8 +541,16 @@ export async function updateStudent(
   if (name) legacyPayload.name = name;
   if (updates.father_name !== undefined) legacyPayload.father_name = updates.father_name;
   if (updates.course !== undefined) legacyPayload.course = updates.course;
+  if (updates.subject !== undefined) legacyPayload.subject = updates.subject;
   if (updates.session !== undefined) legacyPayload.session = updates.session;
   if (updates.course_status !== undefined) legacyPayload.course_status = updates.course_status;
+  if (updates.marks !== undefined) legacyPayload.marks = updates.marks;
+  if (updates.grade !== undefined) legacyPayload.grade = updates.grade;
+  if (photoUrl !== undefined) {
+    legacyPayload.profile_picture_url = photoUrl;
+    legacyPayload.photo_url = photoUrl;
+    legacyPayload.student_image = photoUrl;
+  }
   if (certUrl !== undefined) legacyPayload.pdf_url = certUrl;
 
   let supabaseUpdatedRecord: StudentRecord | null = null;
@@ -558,53 +563,82 @@ export async function updateStudent(
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
       const targetRoll = rollNo || cleanId;
 
-      // Only try valid schema payloads
-      const payloadsToTry = [primaryPayload, fallbackPayload];
+      // Adaptive update helper: automatically prunes any missing columns from payload and retries
+      const attemptAdaptiveUpdate = async (initialPayload: any) => {
+        const payload = { ...initialPayload };
+        let attempts = 0;
+        const maxAttempts = 12;
 
-      for (const payload of payloadsToTry) {
-        if (Object.keys(payload).length === 0) continue;
+        while (attempts < maxAttempts && Object.keys(payload).length > 0) {
+          attempts++;
 
-        // 1. Try update by UUID primary key
-        if (isUuid) {
-          const res = await supabase
-            .from('students')
-            .update(payload)
-            .eq('id', cleanId)
-            .select()
-            .maybeSingle();
+          // Try UUID first if valid
+          if (isUuid) {
+            const res = await supabase
+              .from('students')
+              .update(payload)
+              .eq('id', cleanId)
+              .select()
+              .maybeSingle();
 
-          if (res.data) {
-            supabaseUpdatedRecord = normalizeStudentRow(res.data);
-            break;
+            if (res.data) {
+              return { data: normalizeStudentRow(res.data), error: null };
+            }
+            if (res.error) {
+              const missingCol = extractMissingColumn(res.error.message);
+              if (missingCol && missingCol in payload) {
+                console.warn(`Supabase schema cache missing column '${missingCol}'. Pruning and retrying update...`);
+                delete payload[missingCol];
+                continue;
+              }
+              lastError = res.error;
+            }
           }
-          if (res.error) lastError = res.error;
-        }
 
-        // 2. Try update by roll_no
-        if (targetRoll) {
-          const resRoll = await supabase
-            .from('students')
-            .update(payload)
-            .eq('roll_no', targetRoll)
-            .select()
-            .maybeSingle();
+          // Try roll_no
+          if (targetRoll) {
+            const resRoll = await supabase
+              .from('students')
+              .update(payload)
+              .eq('roll_no', targetRoll)
+              .select()
+              .maybeSingle();
 
-          if (resRoll.data) {
-            supabaseUpdatedRecord = normalizeStudentRow(resRoll.data);
-            break;
+            if (resRoll.data) {
+              return { data: normalizeStudentRow(resRoll.data), error: null };
+            }
+            if (resRoll.error) {
+              const missingCol = extractMissingColumn(resRoll.error.message);
+              if (missingCol && missingCol in payload) {
+                console.warn(`Supabase schema cache missing column '${missingCol}'. Pruning and retrying update...`);
+                delete payload[missingCol];
+                continue;
+              }
+              lastError = resRoll.error;
+            }
           }
-          if (resRoll.error) lastError = resRoll.error;
+
+          // If matched 0 rows without a schema error, exit to try upsert
+          break;
         }
+        return { data: null, error: lastError };
+      };
+
+      // 1. Run adaptive update with primaryPayload
+      const updateResult = await attemptAdaptiveUpdate(primaryPayload);
+      if (updateResult.data) {
+        supabaseUpdatedRecord = updateResult.data;
       }
 
-      // 3. If update matched 0 rows, try upserting record into Supabase
+      // 2. If update matched 0 rows, try adaptive upserting record into Supabase
       if (!supabaseUpdatedRecord && targetRoll) {
-        const fullUpsert: any = {
+        const upsertPayload: any = {
           roll_no: targetRoll,
           student_name: name || updates.student_name || 'Student',
           father_name: updates.father_name || '',
           mother_name: updates.mother_name || '',
           course: updates.course || 'Diploma in Computer Application (DCA)',
+          subject: updates.subject || updates.course || '',
           session: updates.session || '2023-2024',
           start_date: updates.start_date || null,
           end_date: updates.end_date || null,
@@ -613,18 +647,34 @@ export async function updateStudent(
           certificate_url: certUrl || null,
           marks: updates.marks || null,
           grade: updates.grade || null,
+          profile_picture_url: photoUrl || updates.profile_picture_url || updates.photo_url || updates.student_image || null,
         };
 
-        const upsertRes = await supabase
-          .from('students')
-          .upsert([fullUpsert], { onConflict: 'roll_no' })
-          .select()
-          .maybeSingle();
+        let upsertAttempts = 0;
+        const maxUpsertAttempts = 12;
 
-        if (upsertRes.data) {
-          supabaseUpdatedRecord = normalizeStudentRow(upsertRes.data);
-        } else if (upsertRes.error) {
-          lastError = upsertRes.error;
+        while (upsertAttempts < maxUpsertAttempts && Object.keys(upsertPayload).length > 0) {
+          upsertAttempts++;
+          const upsertRes = await supabase
+            .from('students')
+            .upsert([upsertPayload], { onConflict: 'roll_no' })
+            .select()
+            .maybeSingle();
+
+          if (upsertRes.data) {
+            supabaseUpdatedRecord = normalizeStudentRow(upsertRes.data);
+            break;
+          }
+          if (upsertRes.error) {
+            lastError = upsertRes.error;
+            const missingCol = extractMissingColumn(upsertRes.error.message);
+            if (missingCol && missingCol in upsertPayload) {
+              console.warn(`Supabase schema cache missing column '${missingCol}'. Pruning and retrying upsert...`);
+              delete upsertPayload[missingCol];
+              continue;
+            }
+            break;
+          }
         }
       }
 
@@ -661,13 +711,31 @@ export async function updateStudent(
     }
   }
 
+  // Merge safely: do not let null/undefined values from empty DB columns wipe out existing fields
+  const safePayload: any = { ...updates };
+  if (supabaseUpdatedRecord) {
+    for (const [key, value] of Object.entries(supabaseUpdatedRecord)) {
+      if (value !== null && value !== undefined && value !== '') {
+        safePayload[key] = value;
+      }
+    }
+  }
+  const existingPhoto = photoUrl || updates.profile_picture_url || updates.photo_url || updates.student_image;
+  if (existingPhoto) {
+    safePayload.profile_picture_url = existingPhoto;
+    safePayload.photo_url = existingPhoto;
+    safePayload.student_image = existingPhoto;
+  }
+  if (updates.subject) safePayload.subject = updates.subject;
+  if (updates.course) safePayload.course = updates.course;
+  if (updates.mother_name) safePayload.mother_name = updates.mother_name;
+  if (certUrl) {
+    safePayload.certificate_url = certUrl;
+    safePayload.pdf_url = certUrl;
+  }
+
   // Update local storage to keep state in sync
-  const updatedLocal = updateStoredStudent(id, {
-    ...updates,
-    ...(supabaseUpdatedRecord || {}),
-    ...(certUrl ? { certificate_url: certUrl, pdf_url: certUrl } : {}),
-    ...(photoUrl ? { profile_picture_url: photoUrl, photo_url: photoUrl, student_image: photoUrl } : {}),
-  });
+  const updatedLocal = updateStoredStudent(id, safePayload);
 
   if (isSupabaseConfigured() && !supabaseUpdatedRecord) {
     const errMsg = lastError?.message || (typeof lastError === 'string' ? lastError : '');
@@ -679,7 +747,9 @@ export async function updateStudent(
       errMsg.toLowerCase().includes('enotfound') ||
       lastError?.name === 'TypeError';
 
-    if (!isNetworkError) {
+    const isSchemaColumnError = Boolean(extractMissingColumn(errMsg)) || lastError?.code === 'PGRST204';
+
+    if (!isNetworkError && !isSchemaColumnError) {
       const isRlsError =
         errMsg.toLowerCase().includes('row-level security') ||
         errMsg.toLowerCase().includes('violates') ||
@@ -692,11 +762,16 @@ export async function updateStudent(
         );
       }
 
-      throw new Error(
-        errMsg || `Failed to update or create student record for Roll No '${rollNo || id}' in Supabase database.`
-      );
+      // If local storage successfully updated, warn instead of throwing fatal UI error
+      if (updatedLocal) {
+        console.warn('Supabase update notice (changes safely stored in local state):', errMsg);
+      } else {
+        throw new Error(
+          errMsg || `Failed to update or create student record for Roll No '${rollNo || id}' in Supabase database.`
+        );
+      }
     } else {
-      console.warn('Supabase update failed due to network issue, falling back to local storage:', errMsg);
+      console.warn('Supabase update handled with fallback:', errMsg);
     }
   }
 

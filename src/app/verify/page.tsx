@@ -24,6 +24,7 @@ import {
 import { fetchStudentByRollNo } from '@/lib/supabase/student-service';
 import { StudentRecord } from '@/lib/types/portal';
 import { CertificateCard } from '@/components/portal/certificate-card';
+import { getCurrentPortalUser } from '@/lib/supabase/mock-data';
 
 function VerificationContent() {
   const searchParams = useSearchParams();
@@ -35,6 +36,12 @@ function VerificationContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const user = getCurrentPortalUser();
+    setIsAdmin(user?.role === 'admin');
+  }, []);
 
   useEffect(() => {
     if (initialRoll) {
@@ -299,7 +306,7 @@ function VerificationContent() {
 
               {/* Render Printable Certificate Card component */}
               <div id="certificate-card" className="pt-4 text-slate-900 w-full flex justify-center items-center">
-                <CertificateCard student={student} showActions={true} />
+                <CertificateCard student={student} showActions={true} isAdmin={false} />
               </div>
             </div>
           ) : (

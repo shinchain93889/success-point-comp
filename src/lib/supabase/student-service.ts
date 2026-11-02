@@ -182,6 +182,12 @@ export async function fetchStudents(): Promise<StudentRecord[]> {
         if (local.grade && !norm.grade) {
           norm.grade = local.grade;
         }
+        const localPhoto = local.profile_picture_url || local.photo_url || local.student_image;
+        if (localPhoto && !norm.profile_picture_url) {
+          norm.profile_picture_url = localPhoto;
+          norm.photo_url = localPhoto;
+          norm.student_image = localPhoto;
+        }
       }
       return norm;
     });
@@ -308,7 +314,8 @@ export async function createStudent(
         roll_no: rollNo,
         student_name: name,
         father_name: studentData.father_name,
-        mother_name: studentData.mother_name || null,
+    mother_name: studentData.mother_name || '',
+    mother_name: studentData.mother_name || null,
         course: studentData.course,
         subject: studentData.subject || studentData.course || null,
         session: studentData.session,
@@ -338,7 +345,8 @@ export async function createStudent(
             roll_no: rollNo,
             student_name: name,
             father_name: studentData.father_name,
-            mother_name: studentData.mother_name || null,
+    mother_name: studentData.mother_name || '',
+    mother_name: studentData.mother_name || null,
             course: studentData.course,
             session: studentData.session,
             course_status: courseStatus,
@@ -362,6 +370,7 @@ export async function createStudent(
             roll_number: rollNo,
             name: name,
             father_name: studentData.father_name,
+    mother_name: studentData.mother_name || '',
             course: studentData.course,
             session: studentData.session,
             certificate_no: `SP-2024-${rollNo}`,
@@ -378,6 +387,26 @@ export async function createStudent(
 
       if (insertRes.data) {
         const createdRecord = normalizeStudentRow(insertRes.data);
+        if (photoUrl && !createdRecord.profile_picture_url) {
+          createdRecord.profile_picture_url = photoUrl;
+          createdRecord.photo_url = photoUrl;
+          createdRecord.student_image = photoUrl;
+        }
+        if (studentData.subject && !createdRecord.subject) {
+          createdRecord.subject = studentData.subject;
+        }
+        if (studentData.mother_name && !createdRecord.mother_name) {
+          createdRecord.mother_name = studentData.mother_name;
+        }
+        if (studentData.mobile_no && !createdRecord.mobile_no) {
+          createdRecord.mobile_no = studentData.mobile_no;
+        }
+        if (studentData.marks && !createdRecord.marks) {
+          createdRecord.marks = studentData.marks;
+        }
+        if (studentData.grade && !createdRecord.grade) {
+          createdRecord.grade = studentData.grade;
+        }
         addStoredStudent(createdRecord);
         return createdRecord;
       } else if (insertRes.error) {
@@ -436,6 +465,7 @@ export async function createStudent(
     roll_number: rollNo,
     name: name,
     father_name: studentData.father_name,
+    mother_name: studentData.mother_name || '',
     course: studentData.course,
     subject: studentData.subject || studentData.course,
     session: studentData.session,

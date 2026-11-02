@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { signInStudent } from '@/lib/supabase/auth-service';
 import { getCurrentPortalUser } from '@/lib/supabase/mock-data';
 import { Award, UserCheck, ArrowRight, ShieldAlert, ShieldCheck, FileCheck2, Search } from 'lucide-react';
@@ -59,9 +60,7 @@ export default function StudentLoginPage() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 text-center space-y-3">
         <Link href="/" className="inline-flex items-center gap-3 group">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-amber-500 flex items-center justify-center text-white font-extrabold text-2xl shadow-lg shadow-blue-600/30 group-hover:scale-105 transition-transform">
-            SP
-          </div>
+          <Image src="/img/logosp.jpeg" alt="Success Point Logo" width={48} height={48} className="w-12 h-12 rounded-2xl object-cover shadow-lg shadow-blue-600/30 group-hover:scale-105 transition-transform" />
         </Link>
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs font-semibold text-blue-400">
           <Award className="w-4 h-4" />

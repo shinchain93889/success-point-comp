@@ -155,6 +155,8 @@ RETURNS TABLE (
     roll_no TEXT,
     student_name TEXT,
     father_name TEXT,
+    mother_name TEXT,
+    mobile_no TEXT,
     course TEXT,
     session TEXT,
     start_date DATE,
@@ -173,9 +175,10 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-    SELECT s.id, s.roll_no, s.student_name, s.father_name, s.course, s.session,
-           s.start_date, s.end_date, s.course_status, s.certificate_url, s.certificate_no,
-           s.marks, s.grade, s.subject, s.profile_picture_url, s.created_at
+    SELECT s.id, s.roll_no, s.student_name, s.father_name, s.mother_name, s.mobile_no,
+           s.course, s.session, s.start_date, s.end_date, s.course_status, s.certificate_url,
+           s.certificate_no, s.marks, s.grade, s.subject,
+           COALESCE(s.profile_picture_url, s.photo_url) AS profile_picture_url, s.created_at
     FROM public.students AS s
     WHERE lower(s.roll_no) = lower(trim(p_identifier))
        OR lower(s.certificate_no) = lower(trim(p_identifier))

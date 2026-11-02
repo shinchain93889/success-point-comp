@@ -200,6 +200,7 @@ export function CertificateCard({
   const [currentPhoto, setCurrentPhoto] = useState<string | null>(
     student.profile_picture_url || student.photo_url || student.student_image || null
   );
+  const displayPhoto = currentPhoto || student.profile_picture_url || student.photo_url || student.student_image || null;
 
   const [showMotherName, setShowMotherName] = useState<boolean>(true);
   const [motherNameInput, setMotherNameInput] = useState<string>(student.mother_name || '');
@@ -208,7 +209,7 @@ export function CertificateCard({
 
   // Course & Subject Configuration State
   const initialCourse = student.course || 'Computer Office Automation (COA)';
-  const initialSubject = student.subject || initialCourse;
+  const initialSubject = student.subject || COURSE_SUBJECT_PRESETS[initialCourse]?.[0] || initialCourse;
   const [currentCourse, setCurrentCourse] = useState<string>(initialCourse);
   const [currentSubject, setCurrentSubject] = useState<string>(initialSubject);
   const [showSubject, setShowSubject] = useState<boolean>(true);
@@ -241,7 +242,7 @@ export function CertificateCard({
       setMotherNameInput(student.mother_name);
     }
     const c = student.course || 'Computer Office Automation (COA)';
-    const s = student.subject || c;
+    const s = student.subject || COURSE_SUBJECT_PRESETS[c]?.[0] || c;
     setCurrentCourse(c);
     setCurrentSubject(s);
     setCourseInput(c);
@@ -1210,10 +1211,10 @@ export function CertificateCard({
 
                 {/* Right: Student Photo Frame - FIXED PASSPORT DIMENSIONS & NO STRETCH */}
                 <div className="flex justify-end pr-1 sm:pr-2 print:block">
-                  {currentPhoto ? (
+                  {displayPhoto ? (
                     <div className="relative group shrink-0" style={{ width: '92px', height: '115px' }}>
                       <img
-                        src={currentPhoto}
+                        src={displayPhoto}
                         alt={studentName}
                         className="w-full h-full object-cover border-2 border-amber-600 shadow-sm rounded-xs"
                         style={{ width: '92px', height: '115px', objectFit: 'cover' }}
@@ -1309,7 +1310,7 @@ export function CertificateCard({
                   <p className="min-w-0 break-words text-sm sm:text-base font-extrabold text-blue-700 tracking-wide py-0.5 [overflow-wrap:anywhere]">
                     {course}
                   </p>
-                  {showSubject && subject && subject !== course && (
+                  {showSubject && subject && (
                     <p className="text-xs sm:text-sm text-slate-900 font-medium py-0.5">
                       in the subject of{' '}
                       <span className="min-w-0 break-words font-bold text-blue-700 [overflow-wrap:anywhere]">{subject}</span>
@@ -1587,10 +1588,10 @@ export function CertificateCard({
             <div className="grid grid-cols-3 items-end pt-6 border-t border-slate-200 relative z-10">
               {/* Left: Issue Details & Student Photo */}
               <div className="flex items-center gap-3 text-left">
-                {currentPhoto ? (
+                {displayPhoto ? (
                   <div className="relative group">
                     <img
-                      src={currentPhoto}
+                      src={displayPhoto}
                       alt={studentName}
                       className="w-14 h-14 rounded-lg object-cover border border-slate-300 shadow-sm"
                       style={{ width: '56px', height: '56px', objectFit: 'cover' }}

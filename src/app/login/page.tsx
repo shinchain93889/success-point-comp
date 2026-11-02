@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { getCurrentPortalUser } from '@/lib/supabase/mock-data';
 import { signOutUser, signInStudent } from '@/lib/supabase/auth-service';
@@ -67,9 +68,7 @@ export default function LoginPage() {
       {/* Header section */}
       <div className="sm:mx-auto sm:w-full sm:max-w-2xl relative z-10 text-center space-y-4 px-4">
         <Link href="/" className="inline-flex items-center gap-3 group">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-600 to-blue-600 flex items-center justify-center text-white font-extrabold text-2xl shadow-xl shadow-amber-600/20 group-hover:scale-105 transition-transform">
-            SP
-          </div>
+          <Image src="/img/logosp.jpeg" alt="Success Point Logo" width={56} height={56} className="w-14 h-14 rounded-2xl object-cover shadow-xl shadow-amber-600/20 group-hover:scale-105 transition-transform" />
         </Link>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-serif">
           Success Point Institute Portals

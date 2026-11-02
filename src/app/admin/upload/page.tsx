@@ -129,6 +129,7 @@ function AdminUploadPageContent() {
           father_name: row.father_name,
           mother_name: row.mother_name,
           course: row.course,
+          subject: row.subject || row.course,
           session: row.session,
           start_date: row.start_date,
           end_date: row.end_date,

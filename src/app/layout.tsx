@@ -9,6 +9,16 @@ import { ThemeProvider } from '@/components/theme-provider';
 export const metadata: Metadata = {
   title: 'Success Point Computer',
   description: 'Your one-stop solution for computer training, repairs, and services.',
+  icons: {
+    icon: [
+      { url: '/img/logosp.jpeg', type: 'image/jpeg' },
+      { url: '/favicon.ico' },
+    ],
+    shortcut: ['/favicon.ico'],
+    apple: [
+      { url: '/img/logosp.jpeg', type: 'image/jpeg' },
+    ],
+  },
 };
 
 export default function RootLayout({
@@ -19,6 +29,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth" suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/img/logosp.jpeg" type="image/jpeg" />
+        <link rel="apple-touch-icon" href="/img/logosp.jpeg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=PT+Sans:wght@400;700&display=swap" rel="stylesheet" />

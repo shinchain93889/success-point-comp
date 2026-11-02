@@ -61,6 +61,7 @@ export interface BulkUploadRow {
   father_name: string;
   mother_name?: string;
   course: string;
+  subject?: string;
   session: string;
   start_date?: string;
   end_date?: string;
@@ -71,4 +72,5 @@ export interface BulkUploadRow {
   phone?: string;
   marks?: string;
   grade?: string;
+  profile_picture_url?: string;
 }
